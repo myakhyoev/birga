@@ -16,7 +16,7 @@ services:
       retries: 20
 
   migrate:
-    image: migrate/migrate:v4.18.3
+    image: migrate/migrate:v4.20.1
     command: ["-path", "/migrations", "-database", "postgres://birga:birga@postgres:5432/birga?sslmode=disable", "up"]
     volumes:
       - ./migrations:/migrations:ro

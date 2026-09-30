@@ -10,7 +10,16 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/birga_backend ./cmd/server
 
-FROM alpine:3.22
+# Migrations image: `docker build --target migrations .`
+# Deployed next to the API so servers never need the source tree.
+FROM migrate/migrate:v4.20.1 AS migrations
+
+COPY migrations /migrations
+
+ENTRYPOINT ["migrate", "-path", "/migrations"]
+
+# Runtime image (default target)
+FROM alpine:3.22 AS runtime
 
 RUN apk add --no-cache ca-certificates tzdata \
     && adduser -D -u 10001 app
