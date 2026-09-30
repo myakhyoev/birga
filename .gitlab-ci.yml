@@ -1,0 +1,45 @@
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  GOLANG_IMAGE: golang:1.27.1
+
+lint:
+  stage: lint
+  image: golangci/golangci-lint:v2.12.2
+  script:
+    - golangci-lint run -c .golangci.yml ./...
+
+test:
+  stage: test
+  image: $GOLANG_IMAGE
+  services:
+    - name: postgres:17-alpine
+      alias: postgres
+  variables:
+    POSTGRES_USER: birga
+    POSTGRES_PASSWORD: birga
+    POSTGRES_DB: birga
+    TEST_POSTGRES_URL: postgres://birga:birga@postgres:5432/birga?sslmode=disable
+  before_script:
+    - go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
+    - migrate -path migrations -database "$TEST_POSTGRES_URL" up
+  script:
+    - go test -race -count=1 -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out | tail -1
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+
+build-image:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" -t "$CI_REGISTRY_IMAGE:latest" .
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE:latest"

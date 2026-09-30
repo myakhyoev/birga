@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: birga
+      POSTGRES_PASSWORD: birga
+      POSTGRES_DB: birga
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U birga -d birga"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    image: migrate/migrate:v4.18.3
+    command: ["-path", "/migrations", "-database", "postgres://birga:birga@postgres:5432/birga?sslmode=disable", "up"]
+    volumes:
+      - ./migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: .
+    env_file: .env.example
+    environment:
+      POSTGRES_URL: postgres://birga:birga@postgres:5432/birga?sslmode=disable
+    ports:
+      - "${API_HOST_PORT:-8080}:8080"
+      - "${METRICS_HOST_PORT:-9090}:9090"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

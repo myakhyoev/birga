@@ -1,0 +1,519 @@
+basePath: /
+definitions:
+  rest.BadRequestResponse:
+    properties:
+      data: {}
+      error_code:
+        allOf:
+        - $ref: '#/definitions/rest.errCode'
+        example: -11
+      error_note:
+        example: limit must be a positive integer
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/rest.statusType'
+        example: Failure
+    type: object
+  rest.CreateActivityRequest:
+    properties:
+      description_ru:
+        example: Сортируйте камни по цвету
+        type: string
+      description_uz:
+        example: Toshlarni rangi bo'yicha saralang
+        type: string
+      duration_minutes:
+        example: 10
+        maximum: 60
+        minimum: 1
+        type: integer
+      goal:
+        enum:
+        - language
+        - motor
+        - cognitive
+        - social
+        - emotional
+        example: cognitive
+        type: string
+      is_published:
+        example: true
+        type: boolean
+      max_age:
+        example: 5
+        maximum: 6
+        minimum: 2
+        type: integer
+      min_age:
+        example: 3
+        maximum: 6
+        minimum: 2
+        type: integer
+      title_ru:
+        example: Цветные камни
+        type: string
+      title_uz:
+        example: Rangli toshlar
+        type: string
+    type: object
+  rest.InternalServerErrorResponse:
+    properties:
+      data: {}
+      error_code:
+        allOf:
+        - $ref: '#/definitions/rest.errCode'
+        example: -50
+      error_note:
+        example: internal error
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/rest.statusType'
+        example: Failure
+    type: object
+  rest.NotFoundResponse:
+    properties:
+      data: {}
+      error_code:
+        allOf:
+        - $ref: '#/definitions/rest.errCode'
+        example: -30
+      error_note:
+        example: activity not found
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/rest.statusType'
+        example: Failure
+    type: object
+  rest.R:
+    properties:
+      data: {}
+      error_code:
+        $ref: '#/definitions/rest.errCode'
+      error_note:
+        type: string
+      status:
+        $ref: '#/definitions/rest.statusType'
+    type: object
+  rest.ServiceUnavailableResponse:
+    properties:
+      data: {}
+      error_code:
+        allOf:
+        - $ref: '#/definitions/rest.errCode'
+        example: -60
+      error_note:
+        example: database unavailable
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/rest.statusType'
+        example: Failure
+    type: object
+  rest.UnauthorizedResponse:
+    properties:
+      data: {}
+      error_code:
+        allOf:
+        - $ref: '#/definitions/rest.errCode'
+        example: -20
+      error_note:
+        example: unauthorized
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/rest.statusType'
+        example: Failure
+    type: object
+  rest.UnprocessableContentResponse:
+    properties:
+      data: {}
+      error_code:
+        allOf:
+        - $ref: '#/definitions/rest.errCode'
+        example: -10
+      error_note:
+        example: unknown goal "flying"
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/rest.statusType'
+        example: Failure
+    type: object
+  rest.activityListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.activityView'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 42
+        type: integer
+    type: object
+  rest.activityView:
+    properties:
+      created_at:
+        type: string
+      description_ru:
+        type: string
+      description_uz:
+        type: string
+      duration_minutes:
+        example: 10
+        type: integer
+      goal:
+        example: cognitive
+        type: string
+      id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      is_published:
+        example: true
+        type: boolean
+      max_age:
+        example: 5
+        type: integer
+      min_age:
+        example: 3
+        type: integer
+      title_ru:
+        example: Цветные камни
+        type: string
+      title_uz:
+        example: Rangli toshlar
+        type: string
+      updated_at:
+        type: string
+    type: object
+  rest.errCode:
+    enum:
+    - 0
+    - -10
+    - -11
+    - -20
+    - -21
+    - -30
+    - -40
+    - -50
+    - -60
+    type: integer
+    x-enum-comments:
+      _errCodeBadRequest: for http 400
+      _errCodeConflict: for http 409
+      _errCodeForbidden: for http 403
+      _errCodeInternalErr: for http 500
+      _errCodeNoError: Success code.
+      _errCodeNotFound: for http 404
+      _errCodeUnauthorized: for http 401
+      _errCodeUnavailable: for http 503
+      _errCodeValidation: for http 422
+    x-enum-descriptions:
+    - Success code.
+    - for http 422
+    - for http 400
+    - for http 401
+    - for http 403
+    - for http 404
+    - for http 409
+    - for http 500
+    - for http 503
+    x-enum-varnames:
+    - _errCodeNoError
+    - _errCodeValidation
+    - _errCodeBadRequest
+    - _errCodeUnauthorized
+    - _errCodeForbidden
+    - _errCodeNotFound
+    - _errCodeConflict
+    - _errCodeInternalErr
+    - _errCodeUnavailable
+  rest.statusType:
+    enum:
+    - Success
+    - Failure
+    type: string
+    x-enum-varnames:
+    - _statusSuccess
+    - _statusFailure
+info:
+  contact: {}
+  description: Backend for the Birga caregiver app.
+  title: Birga API
+  version: v1
+paths:
+  /health:
+    get:
+      description: Checks that the database is reachable.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/rest.ServiceUnavailableResponse'
+      summary: readiness probe
+      tags:
+      - system
+  /ping:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+      summary: liveness probe
+      tags:
+      - system
+  /v1/activities:
+    get:
+      parameters:
+      - description: child age in years (2..6)
+        in: query
+        name: age
+        type: integer
+      - description: development goal
+        enum:
+        - language
+        - motor
+        - cognitive
+        - social
+        - emotional
+        in: query
+        name: goal
+        type: string
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      summary: lists published activities
+      tags:
+      - activities
+  /v1/activities/{id}:
+    get:
+      parameters:
+      - description: activity id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      summary: returns a published activity
+      tags:
+      - activities
+  /v1/admin/activities:
+    get:
+      parameters:
+      - description: child age in years (2..6)
+        in: query
+        name: age
+        type: integer
+      - description: development goal
+        enum:
+        - language
+        - motor
+        - cognitive
+        - social
+        - emotional
+        in: query
+        name: goal
+        type: string
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: lists all activities, including unpublished
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - title/description are required in both Uzbek (uz) and Russian (ru)
+        - goal is one of: language, motor, cognitive, social, emotional
+        - min_age/max_age are child ages in years, within 2..6
+      parameters:
+      - description: activity
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.CreateActivityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: creates an activity
+      tags:
+      - admin
+  /v1/admin/activities/{id}:
+    get:
+      parameters:
+      - description: activity id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: returns an activity, including unpublished
+      tags:
+      - admin
+securityDefinitions:
+  AdminKey:
+    in: header
+    name: X-Admin-Key
+    type: apiKey
+swagger: "2.0"

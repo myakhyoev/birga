@@ -1,0 +1,145 @@
+package rest
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"gitlab.com/loyihalar/birga/backend/internal/config"
+	"gitlab.com/loyihalar/birga/backend/internal/domain"
+	"gitlab.com/loyihalar/birga/backend/pkg/logger"
+	"gitlab.com/loyihalar/birga/backend/pkg/logger/ginlog"
+	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
+)
+
+const (
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = 30 * time.Second
+	writeTimeout      = 30 * time.Second
+	idleTimeout       = 2 * time.Minute
+)
+
+// routes excluded from access logs and metrics
+var noisyRoutes = []string{"/swagger/*any", "/ping", "/health"}
+
+type healthChecker interface {
+	Ping(ctx context.Context) error
+}
+
+type activityCreator interface {
+	Execute(ctx context.Context, a domain.Activity) (domain.Activity, error)
+}
+
+type activityLister interface {
+	Execute(ctx context.Context, f domain.ActivityFilter) ([]domain.Activity, int, error)
+}
+
+type activityGetter interface {
+	Execute(ctx context.Context, id string, includeUnpublished bool) (domain.Activity, error)
+}
+
+type Server struct {
+	l          logger.Logger
+	router     *gin.Engine
+	httpServer *http.Server
+	adminKey   string
+
+	health          healthChecker
+	activityCreator activityCreator
+	activityLister  activityLister
+	activityGetter  activityGetter
+}
+
+func New(cfg config.Application,
+	l logger.Logger,
+	health healthChecker,
+	activityCreator activityCreator,
+	activityLister activityLister,
+	activityGetter activityGetter,
+) *Server {
+	if cfg.IsProduction() {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r := gin.New()
+	r.Use(
+		ginlog.RequestID(),
+		ginlog.Recovery(true),
+		ginlog.LogExcept(noisyRoutes, ginlog.DefaultResolver),
+		metrics.Gin(resolveErrCode, noisyRoutes...),
+		corsMiddleware(),
+	)
+
+	s := Server{
+		l:               l,
+		router:          r,
+		adminKey:        cfg.AdminAPIKey,
+		health:          health,
+		activityCreator: activityCreator,
+		activityLister:  activityLister,
+		activityGetter:  activityGetter,
+	}
+
+	s.httpServer = &http.Server{
+		Addr:              cfg.HTTPPort,
+		Handler:           &s,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+	}
+
+	s.endpoints()
+
+	return &s
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.httpServer.Shutdown(ctx)
+}
+
+func (s *Server) ListenAndServe() error {
+	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.router.ServeHTTP(w, r)
+}
+
+// corsMiddleware declares cors policy
+func corsMiddleware(extraAllowedHeaders ...string) gin.HandlerFunc {
+	var (
+		allowedHeaders = append([]string{
+			"Content-Type",
+			"Content-Length",
+			"Accept-Encoding",
+			"Authorization",
+			"Accept",
+			"Origin",
+			"Cache-Control",
+			"X-Requested-With",
+			"X-Request-Id",
+			adminKeyHeader,
+		}, extraAllowedHeaders...)
+		allowedHeadersVal = strings.Join(allowedHeaders, ", ")
+	)
+
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
+		c.Header("Access-Control-Allow-Headers", allowedHeadersVal)
+		c.Header("Access-Control-Expose-Headers", "X-Request-Id")
+		c.Header("Access-Control-Max-Age", "3600")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+
+			return
+		}
+
+		c.Next()
+	}
+}

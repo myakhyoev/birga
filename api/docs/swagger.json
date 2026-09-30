@@ -1,0 +1,796 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "Backend for the Birga caregiver app.",
+        "title": "Birga API",
+        "contact": {},
+        "version": "v1"
+    },
+    "basePath": "/",
+    "paths": {
+        "/health": {
+            "get": {
+                "description": "Checks that the database is reachable.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "readiness probe",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ServiceUnavailableResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/ping": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "system"
+                ],
+                "summary": "liveness probe",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/activities": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "activities"
+                ],
+                "summary": "lists published activities",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "language",
+                            "motor",
+                            "cognitive",
+                            "social",
+                            "emotional"
+                        ],
+                        "type": "string",
+                        "description": "development goal",
+                        "name": "goal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/activities/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "activities"
+                ],
+                "summary": "returns a published activity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "activity id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/activities": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "lists all activities, including unpublished",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "child age in years (2..6)",
+                        "name": "age",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "language",
+                            "motor",
+                            "cognitive",
+                            "social",
+                            "emotional"
+                        ],
+                        "type": "string",
+                        "description": "development goal",
+                        "name": "goal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal is one of: language, motor, cognitive, social, emotional\n- min_age/max_age are child ages in years, within 2..6",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates an activity",
+                "parameters": [
+                    {
+                        "description": "activity",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CreateActivityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/activities/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "returns an activity, including unpublished",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "activity id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "rest.BadRequestResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -11
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "limit must be a positive integer"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
+        "rest.CreateActivityRequest": {
+            "type": "object",
+            "properties": {
+                "description_ru": {
+                    "type": "string",
+                    "example": "Сортируйте камни по цвету"
+                },
+                "description_uz": {
+                    "type": "string",
+                    "example": "Toshlarni rangi bo'yicha saralang"
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "example": 10
+                },
+                "goal": {
+                    "type": "string",
+                    "enum": [
+                        "language",
+                        "motor",
+                        "cognitive",
+                        "social",
+                        "emotional"
+                    ],
+                    "example": "cognitive"
+                },
+                "is_published": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 3
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Цветные камни"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Rangli toshlar"
+                }
+            }
+        },
+        "rest.InternalServerErrorResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -50
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "internal error"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
+        "rest.NotFoundResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -30
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "activity not found"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
+        "rest.R": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "$ref": "#/definitions/rest.errCode"
+                },
+                "error_note": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/rest.statusType"
+                }
+            }
+        },
+        "rest.ServiceUnavailableResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -60
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "database unavailable"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
+        "rest.UnauthorizedResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -20
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "unauthorized"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
+        "rest.UnprocessableContentResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -10
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "unknown goal \"flying\""
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
+        "rest.activityListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.activityView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "rest.activityView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description_ru": {
+                    "type": "string"
+                },
+                "description_uz": {
+                    "type": "string"
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "goal": {
+                    "type": "string",
+                    "example": "cognitive"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "is_published": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Цветные камни"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Rangli toshlar"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "rest.errCode": {
+            "type": "integer",
+            "enum": [
+                0,
+                -10,
+                -11,
+                -20,
+                -21,
+                -30,
+                -40,
+                -50,
+                -60
+            ],
+            "x-enum-comments": {
+                "_errCodeBadRequest": "for http 400",
+                "_errCodeConflict": "for http 409",
+                "_errCodeForbidden": "for http 403",
+                "_errCodeInternalErr": "for http 500",
+                "_errCodeNoError": "Success code.",
+                "_errCodeNotFound": "for http 404",
+                "_errCodeUnauthorized": "for http 401",
+                "_errCodeUnavailable": "for http 503",
+                "_errCodeValidation": "for http 422"
+            },
+            "x-enum-descriptions": [
+                "Success code.",
+                "for http 422",
+                "for http 400",
+                "for http 401",
+                "for http 403",
+                "for http 404",
+                "for http 409",
+                "for http 500",
+                "for http 503"
+            ],
+            "x-enum-varnames": [
+                "_errCodeNoError",
+                "_errCodeValidation",
+                "_errCodeBadRequest",
+                "_errCodeUnauthorized",
+                "_errCodeForbidden",
+                "_errCodeNotFound",
+                "_errCodeConflict",
+                "_errCodeInternalErr",
+                "_errCodeUnavailable"
+            ]
+        },
+        "rest.statusType": {
+            "type": "string",
+            "enum": [
+                "Success",
+                "Failure"
+            ],
+            "x-enum-varnames": [
+                "_statusSuccess",
+                "_statusFailure"
+            ]
+        }
+    },
+    "securityDefinitions": {
+        "AdminKey": {
+            "type": "apiKey",
+            "name": "X-Admin-Key",
+            "in": "header"
+        }
+    }
+}
