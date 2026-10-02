@@ -2,6 +2,8 @@
 
 Go API for the Birga caregiver app: curated offline activities for children aged 2 to 6.
 
+Full technical documentation is in [docs/](docs/README.md): setup, architecture, API, data model and operations.
+
 ## Quick start
 
 ```bash
