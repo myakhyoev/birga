@@ -19,7 +19,7 @@ func TestAuthRepo(t *testing.T) {
 		}
 
 		if err := s.Auth().Create(ctx, domain.UserAuth{
-			UserID: u.ID, Username: "auth_test", PasswordHash: "bcrypt", AccessTokenHash: "a", RefreshTokenHash: "r",
+			UserID: u.ID, Username: "auth_test", PasswordHash: "bcrypt", Role: domain.UserRolePaidUser, AccessTokenHash: "a", RefreshTokenHash: "r",
 		}); err != nil {
 			t.Fatalf("Create auth: %v", err)
 		}
@@ -34,7 +34,9 @@ func TestAuthRepo(t *testing.T) {
 		}
 
 		got, err := s.Auth().Get(ctx, u.ID)
-		want := domain.UserAuth{UserID: u.ID, Username: "auth_renamed", PasswordHash: "bcrypt", AccessTokenHash: "a2", RefreshTokenHash: "r"}
+		want := domain.UserAuth{
+			UserID: u.ID, Username: "auth_renamed", PasswordHash: "bcrypt", Role: domain.UserRolePaidUser, AccessTokenHash: "a2", RefreshTokenHash: "r",
+		}
 
 		if err != nil || got != want {
 			t.Fatalf("Get = %+v, %v; want %+v", got, err, want)

@@ -16,9 +16,11 @@ import (
 // MinSecretLength is the shortest accepted JWT_SECRET, in bytes (the HS256 key size).
 const MinSecretLength = 32
 
-// claims: sub is the user id, typ says access or refresh, jti makes every token unique.
+// claims: sub is the user id, typ says access or refresh, role is the user's role when the token
+// was issued, jti makes every token unique.
 type claims struct {
 	Type domain.TokenType `json:"typ"`
+	Role domain.UserRole  `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -41,8 +43,8 @@ func New(cfg config.JWTConfig) (*Issuer, error) {
 // AccessTTL is the access token lifetime.
 func (i *Issuer) AccessTTL() time.Duration { return i.cfg.AccessTTL }
 
-// Issue signs a token of type typ for userID.
-func (i *Issuer) Issue(userID string, typ domain.TokenType) (string, error) {
+// Issue signs a token of type typ for userID with role.
+func (i *Issuer) Issue(userID string, role domain.UserRole, typ domain.TokenType) (string, error) {
 	ttl := i.cfg.AccessTTL
 	if typ == domain.TokenTypeRefresh {
 		ttl = i.cfg.RefreshTTL
@@ -52,6 +54,7 @@ func (i *Issuer) Issue(userID string, typ domain.TokenType) (string, error) {
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
 		Type: typ,
+		Role: role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    i.cfg.Issuer,
 			Subject:   userID,
@@ -90,5 +93,5 @@ func (i *Issuer) Parse(token string, want domain.TokenType) (domain.TokenClaims,
 		return domain.TokenClaims{}, errs.Errf(errs.ErrUnauthorized, "invalid token subject")
 	}
 
-	return domain.TokenClaims{UserID: c.Subject, Type: c.Type}, nil
+	return domain.TokenClaims{UserID: c.Subject, Type: c.Type, Role: c.Role}, nil
 }

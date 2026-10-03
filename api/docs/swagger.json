@@ -1006,7 +1006,7 @@
         },
         "/v1/auth/signup": {
             "post": {
-                "description": "- the phone number must be verified first: POST /v1/otp/send and /v1/otp/verify with\npurpose sign_up; the verification lasts OTP_VERIFIED_TTL (default 10 minutes) and is\nused up by a successful sign-up. Not verified: 403\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,\ndefault 30 days) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "description": "- the phone number must be verified first: POST /v1/otp/send and /v1/otp/verify with\npurpose sign_up; the verification lasts OTP_VERIFIED_TTL (default 10 minutes) and is\nused up by a successful sign-up. Not verified: 403\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),\nanything else is 422. Stored in user_auth.role and written into the tokens as the role claim\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,\ndefault 30 days) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -1927,6 +1927,15 @@
                 "phone_number": {
                     "type": "string",
                     "example": "+998901234567"
+                },
+                "user_role": {
+                    "description": "UserRole is optional and defaults to user; admin is refused with 403.",
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "paid_user"
+                    ],
+                    "example": "user"
                 },
                 "username": {
                     "type": "string",

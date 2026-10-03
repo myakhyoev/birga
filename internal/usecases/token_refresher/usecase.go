@@ -13,7 +13,7 @@ import (
 )
 
 type tokenIssuer interface {
-	Issue(userID string, typ domain.TokenType) (string, error)
+	Issue(userID string, role domain.UserRole, typ domain.TokenType) (string, error)
 	Parse(token string, want domain.TokenType) (domain.TokenClaims, error)
 	AccessTTL() time.Duration
 }
@@ -36,7 +36,8 @@ func New(l logger.Logger, tokens tokenIssuer, auth authRepo) *UseCase {
 }
 
 // Execute accepts a refresh token that is validly signed, not expired, and still the one stored
-// in user_auth (so a deleted user's token stops working). The refresh token itself is unchanged.
+// in user_auth (so a deleted user's token stops working). The new access token carries the role
+// stored now, so a role change shows up on the next refresh. The refresh token itself is unchanged.
 func (uc *UseCase) Execute(ctx context.Context, refreshToken string) (domain.AccessToken, error) {
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
@@ -61,7 +62,7 @@ func (uc *UseCase) Execute(ctx context.Context, refreshToken string) (domain.Acc
 		return domain.AccessToken{}, errs.ErrInvalidRefreshToken
 	}
 
-	access, err := uc.tokens.Issue(claims.UserID, domain.TokenTypeAccess)
+	access, err := uc.tokens.Issue(claims.UserID, a.Role, domain.TokenTypeAccess)
 	if err != nil {
 		return domain.AccessToken{}, err
 	}

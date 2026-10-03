@@ -53,12 +53,12 @@ func TestSignUp(t *testing.T) {
 	s, d := newTestServer("")
 
 	code, r := do(t, s, http.MethodPost, "/v1/auth/signup",
-		`{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567"}`, nil)
+		`{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567", "user_role": "paid_user"}`, nil)
 	if code != http.StatusOK {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	want := domain.SignUpRequest{Name: "Dilnoza", Username: "dilnoza_k", Password: "s3cret-pass", PhoneNumber: "+998901234567"}
+	want := domain.SignUpRequest{Name: "Dilnoza", Username: "dilnoza_k", Password: "s3cret-pass", PhoneNumber: "+998901234567", Role: domain.UserRolePaidUser}
 	if d.auth.got != want {
 		t.Fatalf("request = %+v, want %+v", d.auth.got, want)
 	}

@@ -40,7 +40,7 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `ActivityUpdate`, `RecommendationQuery`, `Completion`, `CompletionFilter`, `Streak`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `TokenClaims`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing, the local day (`Location`, `LocalDay`) and the streak calculation (`ComputeStreak`) |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `ActivityUpdate`, `RecommendationQuery`, `Completion`, `CompletionFilter`, `Streak`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `UserRole`, `TokenClaims`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing, the local day (`Location`, `LocalDay`) and the streak calculation (`ComputeStreak`) |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
 | `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Child()` for `children` and `user_children`, `Activity()`, `Completion()` for `activity_completions`, `Media()`) and the transaction helper |
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
@@ -159,13 +159,14 @@ Sign-up depends on a verified phone number, handed over through Redis rather tha
 
 1. `otp_verifier` runs `verifyScript`; a match sets `birga:otp:verified:<purpose>:<phone>` for
    `OTP_VERIFIED_TTL`.
-2. `user_signup` checks the `sign_up` mark, hashes the password with bcrypt (default cost 10),
-   and in one `InTx` creates the `users` row, issues the token pair and inserts `user_auth`
+2. `user_signup` checks the role (`user` by default, `paid_user` allowed, `admin` refused) and
+   the `sign_up` mark, hashes the password with bcrypt (default cost 10),
+   and in one `InTx` creates the `users` row, issues the token pair (with the `role` claim) and inserts `user_auth`
    with the SHA-256 hashes of both tokens. Only after the commit does it delete the mark, so a
    failed sign-up can be retried.
 3. `token_refresher` parses the refresh token (`tokens.Issuer.Parse`: HS256 only, issuer,
    expiry, `typ`), loads `user_auth` and compares hashes in constant time, then issues a new
-   access token and stores its hash. A soft-deleted user has no `user_auth` row, so their
+   access token with the role currently in `user_auth` and stores its hash. A soft-deleted user has no `user_auth` row, so their
    refresh token stops working at once.
 
 4. Signed-in routes use the `userAuth` middleware (`gateways/rest/middleware.go`). It reads

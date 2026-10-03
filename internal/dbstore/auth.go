@@ -22,11 +22,11 @@ func (r *authRepo) Create(ctx context.Context, a domain.UserAuth) error {
 	l := logger.FromCtx(ctx, "authRepo.Create").With(zap.String("user_id", a.UserID))
 
 	q := `
-		INSERT INTO user_auth (id, username, password, access_token, refresh_token)
-		VALUES ($1, $2, $3, $4, $5)`
+		INSERT INTO user_auth (id, username, password, role, access_token, refresh_token)
+		VALUES ($1, $2, $3, $4, $5, $6)`
 
 	_, err := r.store.sqlClientByCtx(ctx).Exec(ctx, q,
-		a.UserID, a.Username, a.PasswordHash, nullIfEmpty(a.AccessTokenHash), nullIfEmpty(a.RefreshTokenHash))
+		a.UserID, a.Username, a.PasswordHash, string(a.Role), nullIfEmpty(a.AccessTokenHash), nullIfEmpty(a.RefreshTokenHash))
 	if err != nil {
 		if conflict := userConflict(err); conflict != nil {
 			return conflict
@@ -45,14 +45,14 @@ func (r *authRepo) Get(ctx context.Context, userID string) (domain.UserAuth, err
 	l := logger.FromCtx(ctx, "authRepo.Get").With(zap.String("user_id", userID))
 
 	q := `
-		SELECT id, COALESCE(username, ''), COALESCE(password, ''),
+		SELECT id, COALESCE(username, ''), COALESCE(password, ''), role::TEXT,
 			COALESCE(access_token, ''), COALESCE(refresh_token, '')
 		FROM user_auth WHERE id = $1`
 
 	var a domain.UserAuth
 
 	err := r.store.sqlClientByCtx(ctx).QueryRow(ctx, q, userID).
-		Scan(&a.UserID, &a.Username, &a.PasswordHash, &a.AccessTokenHash, &a.RefreshTokenHash)
+		Scan(&a.UserID, &a.Username, &a.PasswordHash, &a.Role, &a.AccessTokenHash, &a.RefreshTokenHash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.UserAuth{}, errs.ErrUserNotFound
 	}

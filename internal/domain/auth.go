@@ -20,12 +20,33 @@ const (
 	TokenTypeRefresh TokenType = "refresh"
 )
 
+// UserRole says what a user may do. It is the user_auth.role enum.
+type UserRole string
+
+const (
+	UserRoleUser     UserRole = "user"
+	UserRoleAdmin    UserRole = "admin"
+	UserRolePaidUser UserRole = "paid_user"
+)
+
+// IsKnown reports whether r is one of the user_role enum values.
+func (r UserRole) IsKnown() bool {
+	return r == UserRoleUser || r == UserRoleAdmin || r == UserRolePaidUser
+}
+
+// IsSelfAssignable reports whether a user may pick r at sign-up. admin is never self-assigned.
+func (r UserRole) IsSelfAssignable() bool {
+	return r == UserRoleUser || r == UserRolePaidUser
+}
+
 // SignUpRequest registers a user whose phone number passed a sign_up OTP check.
 type SignUpRequest struct {
 	Name        string
 	Username    string
 	Password    string
 	PhoneNumber string
+	// Role defaults to UserRoleUser when empty.
+	Role UserRole
 }
 
 // TokenPair is what a client keeps after signing up. AccessExpiresIn is the access token lifetime.
@@ -46,6 +67,7 @@ type UserAuth struct {
 	UserID           string
 	Username         string
 	PasswordHash     string
+	Role             UserRole
 	AccessTokenHash  string
 	RefreshTokenHash string
 }
@@ -54,6 +76,7 @@ type UserAuth struct {
 type TokenClaims struct {
 	UserID string
 	Type   TokenType
+	Role   UserRole
 }
 
 // HashToken returns the stored form of a token, so a database leak does not leak usable tokens.

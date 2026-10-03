@@ -13,6 +13,8 @@ type SignUpRequest struct {
 	Username    string `json:"username" example:"dilnoza_k"`
 	Password    string `json:"password" example:"s3cret-pass"`
 	PhoneNumber string `json:"phone_number" example:"+998901234567"`
+	// UserRole is optional and defaults to user; admin is refused with 403.
+	UserRole string `json:"user_role" enums:"user,paid_user" example:"user"`
 }
 
 type tokenPairView struct {
@@ -28,6 +30,8 @@ type tokenPairView struct {
 // @Description   used up by a successful sign-up. Not verified: 403
 // @Description - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
 // @Description   password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
+// @Description - user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),
+// @Description   anything else is 422. Stored in user_auth.role and written into the tokens as the role claim
 // @Description - username or phone number already used: 409
 // @Description - access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,
 // @Description   default 30 days) are HS256 JWTs; send the access token as Authorization: Bearer <token>
@@ -56,6 +60,7 @@ func (s *Server) SignUp() gin.HandlerFunc {
 			Username:    req.Username,
 			Password:    req.Password,
 			PhoneNumber: req.PhoneNumber,
+			Role:        domain.UserRole(req.UserRole),
 		})
 		if err != nil {
 			Return(c, nil, err)
