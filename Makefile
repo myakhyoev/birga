@@ -12,7 +12,7 @@ SWAG_VERSION=v1.16.6
 MIGRATIONS_DIR=${CURRENT_DIR}/migrations
 POSTGRES_URL?=postgres://birga:birga@localhost:5432/birga?sslmode=disable
 
-.PHONY: all build build-image push-image swag-init run up down migrate-up migrate-down migrate-create \
+.PHONY: all build build-image push-image swag-init run up down migrate-up migrate-down migrate-create seed \
 	lint-go test test-integration race coverage coverhtml dep clean help
 
 all: build
@@ -46,6 +46,9 @@ migrate-down: ## roll back the last migration
 
 migrate-create: ## create a migration: make migrate-create name=create_users_table
 	migrate create -ext sql -dir ${MIGRATIONS_DIR} -seq -digits 6 ${name}
+
+seed: ## load the starter activities into the docker compose database (safe to repeat)
+	docker compose exec -T postgres psql -U birga -d birga -v ON_ERROR_STOP=1 < seeds/activities.sql
 
 lint-go: ## lint go files
 	golangci-lint run -c .golangci.yml ./...

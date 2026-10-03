@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pgx "github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
@@ -15,6 +16,7 @@ import (
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 )
 
+// Soft-deleted activities (deleted_at set) are invisible to every read; completions keep pointing at them.
 type activityRepo struct {
 	store sqlClientProvider
 }
@@ -74,30 +76,116 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 func (r *activityRepo) Get(ctx context.Context, id string) (domain.Activity, error) {
 	l := logger.FromCtx(ctx, "activityRepo.Get").With(zap.String("id", id))
 
+	return r.one(ctx, l, `SELECT `+activityColumns+` FROM activities WHERE id = $1 AND deleted_at IS NULL`, id)
+}
+
+// Update applies the non-nil fields of upd. A change that breaks a CHECK constraint (for example
+// min_age above the stored max_age) is ErrValidation.
+func (r *activityRepo) Update(ctx context.Context, id string, upd domain.ActivityUpdate) (domain.Activity, error) {
+	l := logger.FromCtx(ctx, "activityRepo.Update").With(zap.String("id", id))
+
 	var (
-		sqlClient = r.store.sqlClientByCtx(ctx)
-		q         = `SELECT ` + activityColumns + ` FROM activities WHERE id = $1`
+		sets, args = activitySet(upd)
+		q          = `UPDATE activities SET ` + sets +
+			` WHERE id = $` + strconv.Itoa(len(args)+1) + ` AND deleted_at IS NULL RETURNING ` + activityColumns
 	)
 
-	rows, err := sqlClient.Query(ctx, q, id)
-	if err != nil {
-		l.Error("sqlClient.Query", zap.Error(err))
+	return r.one(ctx, l, q, append(args, id)...)
+}
 
-		return domain.Activity{}, errs.Errf(errs.ErrInternal, "%s", err.Error())
+// Delete soft-deletes the activity.
+func (r *activityRepo) Delete(ctx context.Context, id string) error {
+	l := logger.FromCtx(ctx, "activityRepo.Delete").With(zap.String("id", id))
+
+	q := `UPDATE activities SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
+
+	tag, err := r.store.sqlClientByCtx(ctx).Exec(ctx, q, id)
+	if err != nil {
+		l.Error("sqlClient.Exec", zap.Error(err))
+
+		return errs.Errf(errs.ErrInternal, "%s", err.Error())
 	}
 
-	a, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[dbActivity])
+	if tag.RowsAffected() == 0 {
+		return errs.ErrActivityNotFound
+	}
+
+	return nil
+}
+
+// Recommend picks one published activity for the child: within its age, matching the optional goal
+// and time limit, never done before if possible, otherwise the one done longest ago. Ties are broken
+// by a hash of the activity id, the child id and the day, so the pick is stable for the whole day
+// and differs between children.
+func (r *activityRepo) Recommend(ctx context.Context, q domain.RecommendationQuery) (domain.Activity, error) {
+	l := logger.FromCtx(ctx, "activityRepo.Recommend").With(zap.String("child_id", q.ChildID))
+
+	var (
+		args  = []any{q.ChildID, q.Age, q.Day.Format(time.DateOnly)}
+		conds = []string{"a.is_published", "a.deleted_at IS NULL", "a.min_age <= $2", "a.max_age >= $2"}
+	)
+
+	if q.Goal != "" {
+		args = append(args, q.Goal)
+		conds = append(conds, "a.goal = $"+strconv.Itoa(len(args)))
+	}
+
+	if q.MaxMinutes > 0 {
+		args = append(args, q.MaxMinutes)
+		conds = append(conds, "a.duration_minutes <= $"+strconv.Itoa(len(args)))
+	}
+
+	sql := `
+		SELECT ` + prefixColumns("a", activityColumns) + `
+		FROM activities a
+		LEFT JOIN (
+			SELECT activity_id, MAX(completed_on) AS last_on
+			FROM activity_completions WHERE child_id = $1
+			GROUP BY activity_id
+		) done ON done.activity_id = a.id
+		WHERE ` + strings.Join(conds, " AND ") + `
+		ORDER BY done.last_on NULLS FIRST, md5(a.id::text || $1::text || $3::text)
+		LIMIT 1`
+
+	a, err := r.one(ctx, l, sql, args...)
+	if errors.Is(err, errs.ErrActivityNotFound) {
+		return domain.Activity{}, errs.ErrNoRecommendation
+	}
+
+	return a, err
+}
+
+// one runs q, which returns at most one activity row (SELECT, or a write with RETURNING). No row means
+// ErrActivityNotFound; a failed CHECK means ErrValidation.
+func (r *activityRepo) one(ctx context.Context, l *zap.Logger, q string, args ...any) (domain.Activity, error) {
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, args...)
+	if err == nil {
+		var a dbActivity
+
+		a, err = pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[dbActivity])
+		if err == nil {
+			return a.toDomain(), nil
+		}
+	}
+
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Activity{}, errs.ErrActivityNotFound
 	}
 
-	if err != nil {
-		l.Error("pgx.CollectExactlyOneRow", zap.Error(err))
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == pgCheckViolation {
+		if pgErr.ConstraintName == "activities_age_range_chk" {
+			return domain.Activity{}, errs.Errf(errs.ErrValidation,
+				"age range must be within %d..%d and min_age <= max_age, together with the stored values",
+				domain.MinChildAge, domain.MaxChildAge)
+		}
 
-		return domain.Activity{}, errs.Errf(errs.ErrInternal, "%s", err.Error())
+		return domain.Activity{}, errs.Errf(errs.ErrValidation, "%s", pgErr.ConstraintName)
 	}
 
-	return a.toDomain(), nil
+	l.Error("activityRepo query failed", zap.Error(err), zap.String("query", q))
+
+	return domain.Activity{}, errs.Errf(errs.ErrInternal, "%s", err.Error())
 }
 
 // List returns one page of activities matching f and the total number of matches.
@@ -145,7 +233,7 @@ func (r *activityRepo) List(ctx context.Context, f domain.ActivityFilter) ([]dom
 // activityWhere builds a parameterized WHERE clause; values never enter the SQL text.
 func activityWhere(f domain.ActivityFilter) (string, []any) {
 	var (
-		conds []string
+		conds = []string{"deleted_at IS NULL"}
 		args  []any
 	)
 
@@ -164,11 +252,58 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 		conds = append(conds, "min_age <= $"+n+" AND max_age >= $"+n)
 	}
 
-	if len(conds) == 0 {
-		return "", args
+	return " WHERE " + strings.Join(conds, " AND "), args
+}
+
+// activitySet builds a parameterized SET clause from fixed fragments; values never enter the SQL text.
+func activitySet(upd domain.ActivityUpdate) (string, []any) {
+	var (
+		sets = []string{setUpdatedAt}
+		args []any
+	)
+
+	add := func(column string, value any) {
+		args = append(args, value)
+		sets = append(sets, column+" = $"+strconv.Itoa(len(args)))
 	}
 
-	return " WHERE " + strings.Join(conds, " AND "), args
+	if upd.TitleUz != nil {
+		add("title_uz", *upd.TitleUz)
+	}
+
+	if upd.TitleRu != nil {
+		add("title_ru", *upd.TitleRu)
+	}
+
+	if upd.DescriptionUz != nil {
+		add("description_uz", *upd.DescriptionUz)
+	}
+
+	if upd.DescriptionRu != nil {
+		add("description_ru", *upd.DescriptionRu)
+	}
+
+	if upd.Goal != nil {
+		add("goal", *upd.Goal)
+	}
+
+	if upd.MinAge != nil {
+		add("min_age", *upd.MinAge)
+	}
+
+	if upd.MaxAge != nil {
+		add("max_age", *upd.MaxAge)
+	}
+
+	if upd.DurationMinutes != nil {
+		add("duration_minutes", *upd.DurationMinutes)
+	}
+
+	if upd.IsPublished != nil {
+		add("is_published", *upd.IsPublished)
+	}
+
+	return strings.Join(sets, ", "), args
 }
 
 func (a dbActivity) toDomain() domain.Activity {

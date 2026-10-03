@@ -426,6 +426,148 @@
                         }
                     }
                 }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "Sets deleted_at; the activity disappears from every list, get and recommendation.\nCompletions that point at it are kept.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes an activity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "activity id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)\n- send {\"is_published\": true} to publish, false to hide it from the app",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "updates an activity partially, including publishing or unpublishing it",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "activity id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdateActivityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/v1/admin/users": {
@@ -938,6 +1080,338 @@
                 }
             }
         },
+        "/v1/children/{id}/completions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "lists a child's completions, newest first",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.completionListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- only the child's parents can record (404 otherwise); the activity must be published (404)\n- the day is the current date in Uzbekistan (UTC+5); repeating the same activity on the same\nday returns the existing completion, replacing its note if a new one is sent\n- note is the caregiver's optional reflection, at most 1000 characters (422)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "marks an activity done for a child today",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "completion",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CompleteActivityRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.completionView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/children/{id}/recommendation": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6\n- goal and minutes narrow the choice; minutes keeps activities with duration_minutes \u003c= minutes\n- activities the child has never done come first, then the one done longest ago;\nties are broken per child and per day, so the pick stays the same all day until it is done\n- 404 when no published activity matches",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "today's recommended activity for a child",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "language",
+                            "motor",
+                            "cognitive",
+                            "social",
+                            "emotional"
+                        ],
+                        "type": "string",
+                        "description": "development goal",
+                        "name": "goal",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "time available, in minutes",
+                        "name": "minutes",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.activityView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/children/{id}/streak": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- current: consecutive days with a completion up to today, or up to yesterday while\ntoday has none yet (the streak is not lost until a whole day is missed)\n- longest: the longest such run; this_week: days with a completion since Monday\n- days are counted in Uzbekistan time (UTC+5)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "a child's streak and progress",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.streakView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/media": {
             "post": {
                 "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from\n- 503 when S3 is not configured (S3_BUCKET empty)",
@@ -1172,6 +1646,20 @@
                         }
                     ],
                     "example": "Failure"
+                }
+            }
+        },
+        "rest.CompleteActivityRequest": {
+            "type": "object",
+            "properties": {
+                "activity_id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "note": {
+                    "description": "caregiver's reflection, optional",
+                    "type": "string",
+                    "example": "Qizil rangni birinchi topdi"
                 }
             }
         },
@@ -1524,6 +2012,60 @@
                 }
             }
         },
+        "rest.UpdateActivityRequest": {
+            "type": "object",
+            "properties": {
+                "description_ru": {
+                    "type": "string",
+                    "example": "Сортируйте камни по цвету"
+                },
+                "description_uz": {
+                    "type": "string",
+                    "example": "Toshlarni rangi bo'yicha saralang"
+                },
+                "duration_minutes": {
+                    "type": "integer",
+                    "maximum": 60,
+                    "minimum": 1,
+                    "example": 10
+                },
+                "goal": {
+                    "type": "string",
+                    "enum": [
+                        "language",
+                        "motor",
+                        "cognitive",
+                        "social",
+                        "emotional"
+                    ],
+                    "example": "cognitive"
+                },
+                "is_published": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "max_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 5
+                },
+                "min_age": {
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 2,
+                    "example": 3
+                },
+                "title_ru": {
+                    "type": "string",
+                    "example": "Цветные камни"
+                },
+                "title_uz": {
+                    "type": "string",
+                    "example": "Rangli toshlar"
+                }
+            }
+        },
         "rest.UpdateUserRequest": {
             "type": "object",
             "properties": {
@@ -1652,6 +2194,61 @@
                 }
             }
         },
+        "rest.completionListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.completionView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
+        "rest.completionView": {
+            "type": "object",
+            "properties": {
+                "activity_id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "child_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "completed_on": {
+                    "type": "string",
+                    "example": "2026-10-03"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "note": {
+                    "type": "string",
+                    "example": "Qizil rangni birinchi topdi"
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d"
+                }
+            }
+        },
         "rest.errCode": {
             "type": "integer",
             "enum": [
@@ -1751,6 +2348,35 @@
                 "_statusFailure"
             ]
         },
+        "rest.streakView": {
+            "type": "object",
+            "properties": {
+                "completed_today": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "current": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "last_completed_on": {
+                    "type": "string",
+                    "example": "2026-10-03"
+                },
+                "longest": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "this_week": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
         "rest.tokenPairView": {
             "type": "object",
             "properties": {
@@ -1828,6 +2454,12 @@
         "AdminKey": {
             "type": "apiKey",
             "name": "X-Admin-Key",
+            "in": "header"
+        },
+        "BearerAuth": {
+            "description": "Access token from /v1/auth/signup or /v1/auth/refresh, as \"Bearer \u003ctoken\u003e\".",
+            "type": "apiKey",
+            "name": "Authorization",
             "in": "header"
         }
     }

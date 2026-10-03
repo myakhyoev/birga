@@ -26,11 +26,21 @@ func (s *Server) endpoints() {
 		v1.POST("/media", s.UploadMedia())
 	}
 
+	child := v1.Group("/children/:id", s.userAuth())
+	{
+		child.GET("/recommendation", s.RecommendActivity())
+		child.POST("/completions", s.CompleteActivity())
+		child.GET("/completions", s.ListCompletions())
+		child.GET("/streak", s.GetStreak())
+	}
+
 	admin := v1.Group("/admin", s.adminAuth())
 	{
 		admin.POST("/activities", s.CreateActivity())
 		admin.GET("/activities", s.AdminListActivities())
 		admin.GET("/activities/:id", s.AdminGetActivity())
+		admin.PATCH("/activities/:id", s.UpdateActivity())
+		admin.DELETE("/activities/:id", s.DeleteActivity())
 
 		admin.POST("/users", s.CreateUser())
 		admin.GET("/users", s.ListUsers())

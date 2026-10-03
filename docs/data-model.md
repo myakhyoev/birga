@@ -9,7 +9,8 @@ that golang-migrate creates records the current version.
 ### `activities`
 
 The curated catalogue of short offline activities. Created by
-`000001_create_activities_table`.
+`000001_create_activities_table`; `deleted_at` added by `000006_create_activity_completions`.
+Rows are soft-deleted by setting `deleted_at`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -24,7 +25,8 @@ The curated catalogue of short offline activities. Created by
 | `duration_minutes` | `SMALLINT` | no | | expected length |
 | `is_published` | `BOOLEAN` | no | `FALSE` | only published rows are visible to the app |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
-| `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | not yet updated automatically (no update endpoint exists) |
+| `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
+| `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
 
 Constraints:
 
@@ -34,13 +36,24 @@ Constraints:
 Indexes:
 
 - primary key on `id`
-- `activities_published_goal_idx` on `(goal) WHERE is_published`, for the public list
-  filtered by goal
+- `activities_published_goal_idx` on `(goal) WHERE is_published AND deleted_at IS NULL`, for
+  the public list filtered by goal (recreated with the `deleted_at` condition by `000006`)
 
 Goals are plain text, not an enum type or lookup table. The allowed values (`language`,
 `motor`, `cognitive`, `social`, `emotional`) are checked in Go
 (`domain.IsKnownGoal`). The application additionally caps `duration_minutes` at 60, which
 the database does not enforce.
+
+Soft delete rather than a hard delete keeps `activity_completions` rows pointing at a real
+activity, so history and streaks survive. Every repository read filters `deleted_at IS NULL`.
+
+Repository (`store.Activity()`): `Create`, `Get`, `List` (filters and paging), `Update`
+(partial; a failed CHECK becomes `ErrValidation`), `Delete` (soft) and `Recommend` (see
+[api.md](api.md#recommendation)).
+
+A starter set of 12 published activities (two or three per goal, Uzbek and Russian) is in
+`seeds/activities.sql`; load it with `make seed` ([setup.md](setup.md#starter-activities)).
+It is data, not a migration, and skips titles that already exist.
 
 ### `users`
 
@@ -181,6 +194,42 @@ Repository (`store.Child()`): `Create`, `Get`, `List` (optionally by `ParentID`,
 `RemoveParent` (`ErrChildNotFound` when the link does not exist) and `Parents`. Creating a
 child and linking it to its first parent are two calls; a use case runs them in
 `DBStore.InTx`.
+
+### `activity_completions`
+
+One row per activity a child did on a day, with the caregiver's optional reflection. Created
+by `000006_create_activity_completions`. Rows are never updated except for the note, and
+never soft-deleted.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `child_id` | `UUID` | no | | references `children(id)` `ON DELETE CASCADE` |
+| `activity_id` | `UUID` | no | | references `activities(id)` `ON DELETE CASCADE` (activities are only soft-deleted, so this fires only on manual hard deletes) |
+| `user_id` | `UUID` | yes | | parent who marked it, references `users(id)` `ON DELETE SET NULL` |
+| `completed_on` | `DATE` | no | | calendar day in Uzbekistan time (UTC+5), computed by the application |
+| `note` | `TEXT` | yes | | reflection, at most 1000 characters |
+| `created_at` | `TIMESTAMPTZ` | no | `NOW()` | first time it was marked that day |
+
+Constraints:
+
+- `activity_completions_note_len_chk`: `char_length(note) <= 1000`
+
+Indexes:
+
+- primary key on `id`
+- `activity_completions_child_activity_day_uniq`, unique on `(child_id, activity_id,
+  completed_on)`: an activity counts once per child per day. Inserts use
+  `ON CONFLICT ... DO UPDATE` to return the existing row and replace the note.
+- `activity_completions_child_day_idx` on `(child_id, completed_on DESC)`, for the streak and
+  the history list
+
+Repository (`store.Completion()`): `Create` (returns whether a new row was inserted), `List`
+(one child, paged, newest day first) and `Days` (distinct days with a completion, newest
+first, plus the total count). The streak itself is computed in Go by `domain.ComputeStreak`.
+
+`childRepo.GetForParent(id, userID)` returns a child only when it is active and linked to that
+user; every per-child use case calls it first.
 
 ## Conventions
 

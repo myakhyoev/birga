@@ -52,3 +52,35 @@ func IsKnownGoal(goal string) bool {
 		return false
 	}
 }
+
+// MaxActivityDurationMinutes is the longest activity the application accepts.
+const MaxActivityDurationMinutes = 60
+
+// ActivityUpdate is a partial update. A nil field is left unchanged.
+type ActivityUpdate struct {
+	TitleUz         *string
+	TitleRu         *string
+	DescriptionUz   *string
+	DescriptionRu   *string
+	Goal            *string
+	MinAge          *int
+	MaxAge          *int
+	DurationMinutes *int
+	IsPublished     *bool
+}
+
+// IsEmpty reports whether the update changes nothing.
+func (u ActivityUpdate) IsEmpty() bool {
+	return u.TitleUz == nil && u.TitleRu == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
+		u.Goal == nil && u.MinAge == nil && u.MaxAge == nil && u.DurationMinutes == nil && u.IsPublished == nil
+}
+
+// RecommendationQuery describes what a caregiver is looking for today. Zero Goal or MaxMinutes means
+// "any". Day seeds the tie-break so the suggestion stays the same for the whole day.
+type RecommendationQuery struct {
+	ChildID    string
+	Age        int
+	Goal       string
+	MaxMinutes int
+	Day        time.Time
+}

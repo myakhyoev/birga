@@ -71,20 +71,30 @@ type deps struct {
 	otp     *fakeOTPSender
 	media   *fakeMedia
 	auth    *fakeAuth
+	edit    *fakeActivityEdit
+	kids    *fakeChildActivities
 }
 
 func newTestServer(adminKey string) (*Server, *deps) {
 	gin.SetMode(gin.TestMode)
 
-	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}, otp: &fakeOTPSender{}, media: &fakeMedia{}, auth: &fakeAuth{}}
-	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter, UserUseCases{
-		Creator: userCreatorFunc(d.users.create),
-		Lister:  userListerFunc(d.users.list),
-		Getter:  userGetterFunc(d.users.get),
-		Updater: userUpdaterFunc(d.users.update),
-		Deleter: userDeleterFunc(d.users.delete),
-	}, OTPUseCases{Sender: d.otp, Verifier: otpVerifierFunc(d.otp.verify)},
-		AuthUseCases{SignUp: d.auth, Refresher: refresherFunc(d.auth.refresh)}, d.media)
+	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}, otp: &fakeOTPSender{}, media: &fakeMedia{}, auth: &fakeAuth{},
+		edit: &fakeActivityEdit{}, kids: &fakeChildActivities{}}
+	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter,
+		ActivityEditUseCases{Updater: d.edit, Deleter: activityDeleterFunc(d.edit.delete)},
+		ChildActivityUseCases{
+			Recommender: d.kids,
+			Recorder:    recorderFunc(d.kids.record),
+			Lister:      completionListerFunc(d.kids.list),
+			Streak:      streakFunc(d.kids.streak),
+		}, UserUseCases{
+			Creator: userCreatorFunc(d.users.create),
+			Lister:  userListerFunc(d.users.list),
+			Getter:  userGetterFunc(d.users.get),
+			Updater: userUpdaterFunc(d.users.update),
+			Deleter: userDeleterFunc(d.users.delete),
+		}, OTPUseCases{Sender: d.otp, Verifier: otpVerifierFunc(d.otp.verify)},
+		AuthUseCases{SignUp: d.auth, Refresher: refresherFunc(d.auth.refresh), Checker: checkerFunc(d.auth.check)}, d.media)
 
 	return s, d
 }
@@ -236,5 +246,68 @@ func TestRequestIDAndMetrics(t *testing.T) {
 	want := `birga_http_server_request_duration_seconds_count{code="0",method="GET",route="/v1/activities/:id",status="200"}`
 	if !strings.Contains(mw.Body.String(), want) {
 		t.Fatalf("metrics output missing %s", want)
+	}
+}
+
+type fakeActivityEdit struct {
+	gotID     string
+	got       domain.ActivityUpdate
+	deletedID string
+	err       error
+}
+
+func (f *fakeActivityEdit) Execute(_ context.Context, id string, upd domain.ActivityUpdate) (domain.Activity, error) {
+	f.gotID, f.got = id, upd
+
+	return domain.Activity{ID: id}, f.err
+}
+
+func (f *fakeActivityEdit) delete(id string) error {
+	f.deletedID = id
+
+	return f.err
+}
+
+type activityDeleterFunc func(string) error
+
+func (fn activityDeleterFunc) Execute(_ context.Context, id string) error { return fn(id) }
+
+func TestUpdateActivity(t *testing.T) {
+	s, d := newTestServer(testAdminKey)
+	path := "/v1/admin/activities/" + testID
+
+	if code, r := do(t, s, http.MethodPatch, path, `{"is_published":true,"min_age":3}`, adminJSON); code != http.StatusOK {
+		t.Fatalf("update: %d %+v", code, r)
+	}
+
+	if d.edit.gotID != testID || d.edit.got.IsPublished == nil || !*d.edit.got.IsPublished ||
+		d.edit.got.MinAge == nil || *d.edit.got.MinAge != 3 || d.edit.got.TitleUz != nil {
+		t.Fatalf("update not mapped: %+v", d.edit.got)
+	}
+
+	if code, _ := do(t, s, http.MethodPatch, "/v1/admin/activities/x", `{}`, adminJSON); code != http.StatusBadRequest {
+		t.Fatalf("bad id: %d", code)
+	}
+
+	if code, _ := do(t, s, http.MethodPatch, path, `{"min_age":"three"}`, adminJSON); code != http.StatusBadRequest {
+		t.Fatalf("bad body: %d", code)
+	}
+
+	d.edit.err = errs.ErrActivityNotFound
+
+	if code, _ := do(t, s, http.MethodPatch, path, `{"is_published":false}`, adminJSON); code != http.StatusNotFound {
+		t.Fatalf("not found: %d", code)
+	}
+}
+
+func TestDeleteActivity(t *testing.T) {
+	s, d := newTestServer(testAdminKey)
+
+	if code, r := do(t, s, http.MethodDelete, "/v1/admin/activities/"+testID, "", adminJSON); code != http.StatusOK || d.edit.deletedID != testID {
+		t.Fatalf("delete: %d %+v", code, r)
+	}
+
+	if code, _ := do(t, s, http.MethodDelete, "/v1/admin/activities/"+testID, "", nil); code != http.StatusUnauthorized {
+		t.Fatalf("delete without key: %d", code)
 	}
 }

@@ -10,6 +10,8 @@ import (
 
 	"gitlab.com/loyihalar/birga/backend/internal/config"
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
+	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
+	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger/ginlog"
 	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
@@ -39,6 +41,44 @@ type activityLister interface {
 
 type activityGetter interface {
 	Execute(ctx context.Context, id string, includeUnpublished bool) (domain.Activity, error)
+}
+
+type activityUpdater interface {
+	Execute(ctx context.Context, id string, upd domain.ActivityUpdate) (domain.Activity, error)
+}
+
+type activityDeleter interface {
+	Execute(ctx context.Context, id string) error
+}
+
+// ActivityEditUseCases groups the use cases behind PATCH and DELETE /v1/admin/activities/{id}.
+type ActivityEditUseCases struct {
+	Updater activityUpdater
+	Deleter activityDeleter
+}
+
+type activityRecommender interface {
+	Execute(ctx context.Context, req activityrecommender.Request) (domain.Activity, error)
+}
+
+type completionRecorder interface {
+	Execute(ctx context.Context, req completionrecorder.Request) (domain.Completion, error)
+}
+
+type completionLister interface {
+	Execute(ctx context.Context, userID string, f domain.CompletionFilter) ([]domain.Completion, int, error)
+}
+
+type streakGetter interface {
+	Execute(ctx context.Context, userID, childID string) (domain.Streak, error)
+}
+
+// ChildActivityUseCases groups the use cases behind the signed-in /v1/children/{id}/... endpoints.
+type ChildActivityUseCases struct {
+	Recommender activityRecommender
+	Recorder    completionRecorder
+	Lister      completionLister
+	Streak      streakGetter
 }
 
 type userCreator interface {
@@ -91,10 +131,16 @@ type tokenRefresher interface {
 	Execute(ctx context.Context, refreshToken string) (domain.AccessToken, error)
 }
 
+type tokenChecker interface {
+	Execute(ctx context.Context, accessToken string) (string, error)
+}
+
 // AuthUseCases groups the use cases behind the /v1/auth endpoints.
 type AuthUseCases struct {
 	SignUp    signUp
 	Refresher tokenRefresher
+	// Checker authenticates the access token on signed-in endpoints.
+	Checker tokenChecker
 }
 
 // OTPUseCases groups the use cases behind the /v1/otp endpoints.
@@ -113,6 +159,13 @@ type Server struct {
 	activityCreator activityCreator
 	activityLister  activityLister
 	activityGetter  activityGetter
+	activityUpdater activityUpdater
+	activityDeleter activityDeleter
+
+	activityRecommender activityRecommender
+	completionRecorder  completionRecorder
+	completionLister    completionLister
+	streakGetter        streakGetter
 
 	userCreator userCreator
 	userLister  userLister
@@ -125,6 +178,7 @@ type Server struct {
 
 	signUp         signUp
 	tokenRefresher tokenRefresher
+	tokenChecker   tokenChecker
 
 	// mediaUploader is nil when S3 is not configured; POST /v1/media then answers 503.
 	mediaUploader mediaUploader
@@ -136,6 +190,8 @@ func New(cfg config.Application,
 	activityCreator activityCreator,
 	activityLister activityLister,
 	activityGetter activityGetter,
+	activityEdit ActivityEditUseCases,
+	childActivities ChildActivityUseCases,
 	users UserUseCases,
 	otp OTPUseCases,
 	auth AuthUseCases,
@@ -162,16 +218,25 @@ func New(cfg config.Application,
 		activityCreator: activityCreator,
 		activityLister:  activityLister,
 		activityGetter:  activityGetter,
-		userCreator:     users.Creator,
-		userLister:      users.Lister,
-		userGetter:      users.Getter,
-		userUpdater:     users.Updater,
-		userDeleter:     users.Deleter,
-		otpSender:       otp.Sender,
-		otpVerifier:     otp.Verifier,
-		signUp:          auth.SignUp,
-		tokenRefresher:  auth.Refresher,
-		mediaUploader:   media,
+		activityUpdater: activityEdit.Updater,
+		activityDeleter: activityEdit.Deleter,
+
+		activityRecommender: childActivities.Recommender,
+		completionRecorder:  childActivities.Recorder,
+		completionLister:    childActivities.Lister,
+		streakGetter:        childActivities.Streak,
+
+		userCreator:    users.Creator,
+		userLister:     users.Lister,
+		userGetter:     users.Getter,
+		userUpdater:    users.Updater,
+		userDeleter:    users.Deleter,
+		otpSender:      otp.Sender,
+		otpVerifier:    otp.Verifier,
+		signUp:         auth.SignUp,
+		tokenRefresher: auth.Refresher,
+		tokenChecker:   auth.Checker,
+		mediaUploader:  media,
 	}
 
 	s.httpServer = &http.Server{
@@ -207,7 +272,7 @@ func corsMiddleware(extraAllowedHeaders ...string) gin.HandlerFunc {
 			"Content-Type",
 			"Content-Length",
 			"Accept-Encoding",
-			"Authorization",
+			authorizationHeader,
 			"Accept",
 			"Origin",
 			"Cache-Control",

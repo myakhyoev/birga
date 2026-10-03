@@ -28,6 +28,7 @@ make run
 cmd/server/            entrypoint: reads env config, handles SIGINT/SIGTERM
 api/docs/              generated swagger (make swag-init) - do not edit by hand
 migrations/            golang-migrate SQL files (make migrate-create name=...)
+seeds/                 optional starter data (make seed loads the starter activities)
 internal/
   config/              env configuration (sethvargo/go-envconfig)
   bootstrap/           wiring: db -> dbstore -> drivers -> usecases -> gateways; graceful teardown

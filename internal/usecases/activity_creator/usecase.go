@@ -11,7 +11,7 @@ import (
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 )
 
-const maxDurationMinutes = 60
+const maxDurationMinutes = domain.MaxActivityDurationMinutes
 
 type activityRepo interface {
 	Create(ctx context.Context, a domain.Activity) (domain.Activity, error)

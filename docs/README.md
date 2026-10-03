@@ -6,10 +6,13 @@ caregiver's goal, available time), and tracks completions and streaks. Content i
 and Russian.
 
 This repository is the Go API behind the app. Today it serves the activity catalogue and a
-small admin API for managing activities and users (create, read, update, soft delete), and
-sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for sign-up and
-account changes, and uploads profile photos to AWS S3. Child profiles exist in the database and repository
-(`children`, linked to parents many-to-many) but have no endpoints yet; completions come after.
+small admin API for managing activities and users (create, read, update, publish, soft
+delete), sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for sign-up
+and account changes, and uploads profile photos to AWS S3. For a signed-in parent it
+recommends the day's activity for a child, records completions with an optional reflection,
+and reports the child's streak. Child profiles exist in the database and repository
+(`children`, linked to parents many-to-many) but have no endpoints yet, so children are
+created outside the API for now.
 
 ## Start here
 

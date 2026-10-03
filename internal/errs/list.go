@@ -12,6 +12,7 @@ var (
 	ErrRateLimited  = New("too many requests")
 
 	ErrActivityNotFound = Errf(ErrNotFound, "activity not found")
+	ErrNoRecommendation = Errf(ErrNotFound, "no published activity matches this child's age and the filters")
 
 	ErrUserNotFound     = Errf(ErrNotFound, "user not found")
 	ErrUsernameTaken    = Errf(ErrConflict, "username is already taken")

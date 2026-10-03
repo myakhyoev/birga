@@ -234,6 +234,102 @@ func (s *Server) getActivity(includeUnpublished bool) gin.HandlerFunc {
 	}
 }
 
+// UpdateActivityRequest is the body of PATCH /v1/admin/activities/{id}. Omitted or null fields are
+// left unchanged.
+type UpdateActivityRequest struct {
+	TitleUz         *string `json:"title_uz" example:"Rangli toshlar"`
+	TitleRu         *string `json:"title_ru" example:"Цветные камни"`
+	DescriptionUz   *string `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
+	DescriptionRu   *string `json:"description_ru" example:"Сортируйте камни по цвету"`
+	Goal            *string `json:"goal" example:"cognitive" enums:"language,motor,cognitive,social,emotional"`
+	MinAge          *int    `json:"min_age" example:"3" minimum:"2" maximum:"6"`
+	MaxAge          *int    `json:"max_age" example:"5" minimum:"2" maximum:"6"`
+	DurationMinutes *int    `json:"duration_minutes" example:"10" minimum:"1" maximum:"60"`
+	IsPublished     *bool   `json:"is_published" example:"true"`
+}
+
+// UpdateActivity godoc swagger
+// @Summary updates an activity partially, including publishing or unpublishing it
+// @Description - only the fields present in the body change; omitted or null fields are kept
+// @Description - same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)
+// @Description - send {"is_published": true} to publish, false to hide it from the app
+// @Tags admin
+// @Security AdminKey
+// @Accept json
+// @Produce json
+// @Param id path string true "activity id (UUID)"
+// @Param body body UpdateActivityRequest true "fields to change"
+// @Success 200 {object} rest.R{data=rest.activityView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/admin/activities/{id} [PATCH]
+func (s *Server) UpdateActivity() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		if err := ValidateUUID(id); err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		var req UpdateActivityRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Return(c, nil, errs.Errf(errs.ErrBadRequest, "invalid JSON body: %s", err.Error()))
+
+			return
+		}
+
+		a, err := s.activityUpdater.Execute(c.Request.Context(), id, domain.ActivityUpdate{
+			TitleUz:         req.TitleUz,
+			TitleRu:         req.TitleRu,
+			DescriptionUz:   req.DescriptionUz,
+			DescriptionRu:   req.DescriptionRu,
+			Goal:            req.Goal,
+			MinAge:          req.MinAge,
+			MaxAge:          req.MaxAge,
+			DurationMinutes: req.DurationMinutes,
+			IsPublished:     req.IsPublished,
+		})
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, toActivityView(a), nil)
+	}
+}
+
+// DeleteActivity godoc swagger
+// @Summary soft-deletes an activity
+// @Description Sets deleted_at; the activity disappears from every list, get and recommendation.
+// @Description Completions that point at it are kept.
+// @Tags admin
+// @Security AdminKey
+// @Produce json
+// @Param id path string true "activity id (UUID)"
+// @Success 200 {object} rest.R
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/admin/activities/{id} [DELETE]
+func (s *Server) DeleteActivity() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		if err := ValidateUUID(id); err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, nil, s.activityDeleter.Execute(c.Request.Context(), id))
+	}
+}
+
 type activityView struct {
 	ID              string    `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
 	TitleUz         string    `json:"title_uz" example:"Rangli toshlar"`

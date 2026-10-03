@@ -160,7 +160,7 @@ func (r *userRepo) Delete(ctx context.Context, id string) error {
 // userSet builds a parameterized SET clause from fixed fragments; values never enter the SQL text.
 func userSet(upd domain.UserUpdate) (string, []any) {
 	var (
-		sets = []string{"updated_at = NOW()"}
+		sets = []string{setUpdatedAt}
 		args []any
 	)
 

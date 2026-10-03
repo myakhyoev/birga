@@ -16,6 +16,9 @@ const (
 	txContextKey contextKey = "TX_CONTEXT_KEY"
 )
 
+// setUpdatedAt starts every partial-update SET clause.
+const setUpdatedAt = "updated_at = NOW()"
+
 func New(db *pgxpool.Pool) *DBStore {
 	s := &DBStore{db: db}
 
@@ -24,6 +27,7 @@ func New(db *pgxpool.Pool) *DBStore {
 	s.mediaRepo = &mediaRepo{store: s}
 	s.authRepo = &authRepo{store: s}
 	s.childRepo = &childRepo{store: s}
+	s.completionRepo = &completionRepo{store: s}
 
 	return s
 }
@@ -36,6 +40,8 @@ type DBStore struct {
 	mediaRepo    *mediaRepo
 	authRepo     *authRepo
 	childRepo    *childRepo
+
+	completionRepo *completionRepo
 }
 
 func (s *DBStore) Activity() *activityRepo {
@@ -56,6 +62,10 @@ func (s *DBStore) Auth() *authRepo {
 
 func (s *DBStore) Child() *childRepo {
 	return s.childRepo
+}
+
+func (s *DBStore) Completion() *completionRepo {
+	return s.completionRepo
 }
 
 // Ping checks database connectivity (used by the health endpoint).

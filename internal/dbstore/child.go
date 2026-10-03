@@ -53,6 +53,18 @@ func (r *childRepo) Get(ctx context.Context, id string) (domain.Child, error) {
 	return r.one(ctx, l, `SELECT `+childColumns+` FROM children WHERE id = $1 AND deleted_at IS NULL`, id)
 }
 
+// GetForParent returns an active child linked to the given user. A child that does not exist, is
+// deleted or belongs to someone else is ErrChildNotFound, so callers cannot probe other families' ids.
+func (r *childRepo) GetForParent(ctx context.Context, id, userID string) (domain.Child, error) {
+	l := logger.FromCtx(ctx, "childRepo.GetForParent").With(zap.String("id", id), zap.String("user_id", userID))
+
+	q := `SELECT ` + prefixColumns("c", childColumns) + `
+		FROM children c JOIN user_children uc ON uc.child_id = c.id
+		WHERE c.id = $1 AND uc.user_id = $2 AND c.deleted_at IS NULL`
+
+	return r.one(ctx, l, q, id, userID)
+}
+
 // List returns one page of active children and the total number matching f. With f.ParentID set,
 // only that user's children are counted and listed.
 func (r *childRepo) List(ctx context.Context, f domain.ChildFilter) ([]domain.Child, int, error) {
@@ -259,7 +271,7 @@ func childFrom(f domain.ChildFilter) (string, []any) {
 // childSet builds a parameterized SET clause from fixed fragments; values never enter the SQL text.
 func childSet(upd domain.ChildUpdate) (string, []any) {
 	var (
-		sets = []string{"updated_at = NOW()"}
+		sets = []string{setUpdatedAt}
 		args []any
 	)
 

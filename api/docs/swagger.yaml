@@ -15,6 +15,16 @@ definitions:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
     type: object
+  rest.CompleteActivityRequest:
+    properties:
+      activity_id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      note:
+        description: caregiver's reflection, optional
+        example: Qizil rangni birinchi topdi
+        type: string
+    type: object
   rest.ConflictResponse:
     properties:
       data: {}
@@ -239,6 +249,48 @@ definitions:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
     type: object
+  rest.UpdateActivityRequest:
+    properties:
+      description_ru:
+        example: Сортируйте камни по цвету
+        type: string
+      description_uz:
+        example: Toshlarni rangi bo'yicha saralang
+        type: string
+      duration_minutes:
+        example: 10
+        maximum: 60
+        minimum: 1
+        type: integer
+      goal:
+        enum:
+        - language
+        - motor
+        - cognitive
+        - social
+        - emotional
+        example: cognitive
+        type: string
+      is_published:
+        example: true
+        type: boolean
+      max_age:
+        example: 5
+        maximum: 6
+        minimum: 2
+        type: integer
+      min_age:
+        example: 3
+        maximum: 6
+        minimum: 2
+        type: integer
+      title_ru:
+        example: Цветные камни
+        type: string
+      title_uz:
+        example: Rangli toshlar
+        type: string
+    type: object
   rest.UpdateUserRequest:
     properties:
       name:
@@ -330,6 +382,45 @@ definitions:
       updated_at:
         type: string
     type: object
+  rest.completionListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.completionView'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 12
+        type: integer
+    type: object
+  rest.completionView:
+    properties:
+      activity_id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      child_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      completed_on:
+        example: "2026-10-03"
+        type: string
+      created_at:
+        type: string
+      id:
+        example: 5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
+      note:
+        example: Qizil rangni birinchi topdi
+        type: string
+      user_id:
+        example: 9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d
+        type: string
+    type: object
   rest.errCode:
     enum:
     - 0
@@ -411,6 +502,27 @@ definitions:
     x-enum-varnames:
     - _statusSuccess
     - _statusFailure
+  rest.streakView:
+    properties:
+      completed_today:
+        example: true
+        type: boolean
+      current:
+        example: 3
+        type: integer
+      last_completed_on:
+        example: "2026-10-03"
+        type: string
+      longest:
+        example: 7
+        type: integer
+      this_week:
+        example: 2
+        type: integer
+      total:
+        example: 12
+        type: integer
+    type: object
   rest.tokenPairView:
     properties:
       access_token:
@@ -690,6 +802,44 @@ paths:
       tags:
       - admin
   /v1/admin/activities/{id}:
+    delete:
+      description: |-
+        Sets deleted_at; the activity disappears from every list, get and recommendation.
+        Completions that point at it are kept.
+      parameters:
+      - description: activity id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: soft-deletes an activity
+      tags:
+      - admin
     get:
       parameters:
       - description: activity id (UUID)
@@ -728,6 +878,63 @@ paths:
       security:
       - AdminKey: []
       summary: returns an activity, including unpublished
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        - only the fields present in the body change; omitted or null fields are kept
+        - same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)
+        - send {"is_published": true} to publish, false to hide it from the app
+      parameters:
+      - description: activity id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.UpdateActivityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: updates an activity partially, including publishing or unpublishing
+        it
       tags:
       - admin
   /v1/admin/users:
@@ -1062,6 +1269,223 @@ paths:
       summary: creates a user and returns their tokens
       tags:
       - auth
+  /v1/children/{id}/completions:
+    get:
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.completionListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: lists a child's completions, newest first
+      tags:
+      - children
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - only the child's parents can record (404 otherwise); the activity must be published (404)
+        - the day is the current date in Uzbekistan (UTC+5); repeating the same activity on the same
+        day returns the existing completion, replacing its note if a new one is sent
+        - note is the caregiver's optional reflection, at most 1000 characters (422)
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: completion
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.CompleteActivityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.completionView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: marks an activity done for a child today
+      tags:
+      - children
+  /v1/children/{id}/recommendation:
+    get:
+      description: |-
+        - only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6
+        - goal and minutes narrow the choice; minutes keeps activities with duration_minutes <= minutes
+        - activities the child has never done come first, then the one done longest ago;
+        ties are broken per child and per day, so the pick stays the same all day until it is done
+        - 404 when no published activity matches
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: development goal
+        enum:
+        - language
+        - motor
+        - cognitive
+        - social
+        - emotional
+        in: query
+        name: goal
+        type: string
+      - description: time available, in minutes
+        in: query
+        name: minutes
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.activityView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: today's recommended activity for a child
+      tags:
+      - children
+  /v1/children/{id}/streak:
+    get:
+      description: |-
+        - current: consecutive days with a completion up to today, or up to yesterday while
+        today has none yet (the streak is not lost until a whole day is missed)
+        - longest: the longest such run; this_week: days with a completion since Monday
+        - days are counted in Uzbekistan time (UTC+5)
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.streakView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: a child's streak and progress
+      tags:
+      - children
   /v1/media:
     post:
       consumes:
@@ -1219,5 +1643,11 @@ securityDefinitions:
   AdminKey:
     in: header
     name: X-Admin-Key
+    type: apiKey
+  BearerAuth:
+    description: Access token from /v1/auth/signup or /v1/auth/refresh, as "Bearer
+      <token>".
+    in: header
+    name: Authorization
     type: apiKey
 swagger: "2.0"

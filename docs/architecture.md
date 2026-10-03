@@ -40,19 +40,20 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `TokenClaims`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `ActivityUpdate`, `RecommendationQuery`, `Completion`, `CompletionFilter`, `Streak`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `TokenClaims`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing, the local day (`Location`, `LocalDay`) and the streak calculation (`ComputeStreak`) |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
-| `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Child()` for `children` and `user_children`, `Activity()`, `Media()`) and the transaction helper |
+| `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Child()` for `children` and `user_children`, `Activity()`, `Completion()` for `activity_completions`, `Media()`) and the transaction helper |
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
 | `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `token_refresher` |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `activity_recommender`, `completion_recorder`, `completion_lister`, `streak_getter`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `token_refresher` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
 | `pkg/remote/` | JSON-over-HTTP client used by drivers; non-2xx responses become `*remote.StatusError` |
 | `api/docs/` | generated swagger (`make swag-init`); never edit by hand |
 | `migrations/` | golang-migrate SQL files ([data-model.md](data-model.md)) |
+| `seeds/` | optional starter data, loaded by hand (`make seed`), never by migrations |
 
 `pkg/` holds project-independent code written for Birga. Birga does not depend on any
 company-internal libraries.
@@ -95,10 +96,12 @@ Middleware order on every request (`gateways/rest/server.go`):
 A handler parses input, calls one use case, and passes the result to `rest.Return`, which
 writes the response envelope.
 
-`rest.New` takes each activity use case as its own argument; the user use cases come grouped
-in `rest.UserUseCases` (creator, lister, getter, updater, deleter) and the OTP ones in
+`rest.New` takes the activity creator, lister and getter as their own arguments; the activity
+updater and deleter come grouped in `rest.ActivityEditUseCases`, the per-child ones in
+`rest.ChildActivityUseCases` (recommender, completion recorder and lister, streak), the user
+use cases in `rest.UserUseCases` (creator, lister, getter, updater, deleter), the OTP ones in
 `rest.OTPUseCases` (sender, verifier) and the auth ones in `rest.AuthUseCases` (sign-up,
-refresher). Group the use cases of
+refresher, access token checker). Group the use cases of
 new resources the same way rather than growing the argument list.
 
 ## Errors
@@ -116,14 +119,14 @@ The full mapping table is in [api.md](api.md#errors).
 
 ## Database access
 
-- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`, `store.Auth()`, `store.Media()`, `store.Child()`).
+- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`, `store.Auth()`, `store.Media()`, `store.Child()`, `store.Completion()`).
 - `DBStore.InTx(ctx, fn)` runs `fn` in a read-committed transaction. Repository calls made
   with the `ctx` that `fn` receives join the transaction automatically
   (`sqlClientByCtx` picks the `pgx.Tx` from the context, or the pool otherwise).
 - Queries use positional parameters only; dynamic filters and partial updates build the
-  `WHERE` / `SET` clause from fixed fragments (`activityWhere`, `userSet`, `childFrom`, `childSet`), so values never
+  `WHERE` / `SET` clause from fixed fragments (`activityWhere`, `activitySet`, `userSet`, `childFrom`, `childSet`), so values never
   enter the SQL text.
-- Soft-deletable tables (`users`, `children`) are filtered with `deleted_at IS NULL` in every
+- Soft-deletable tables (`users`, `children`, `activities`) are filtered with `deleted_at IS NULL` in every
   repository query, and delete is an `UPDATE ... SET deleted_at = NOW()`.
 - A unique-index violation (`23505`) is mapped to a specific `errs.ErrConflict` error by
   constraint name (`userConflict`), which the gateway turns into a 409. A failed `CHECK`
@@ -165,8 +168,15 @@ Sign-up depends on a verified phone number, handed over through Redis rather tha
    access token and stores its hash. A soft-deleted user has no `user_auth` row, so their
    refresh token stops working at once.
 
-No middleware checks access tokens yet; the first authenticated endpoint will add one that
-calls `tokens.Issuer.Parse(token, domain.TokenTypeAccess)`.
+4. Signed-in routes use the `userAuth` middleware (`gateways/rest/middleware.go`). It reads
+   `Authorization: Bearer <token>` and calls `token_checker`, which parses the token as an
+   access token, loads `user_auth` and compares the stored access token hash in constant time.
+   So only the latest access token works, and a deleted user's token stops working at once.
+   The middleware stores the user id in the gin context; handlers read it with
+   `currentUserID(c)` and pass it to the use case.
+5. Authorization is per resource, in the use case: per-child use cases call
+   `childRepo.GetForParent(childID, userID)` first, which answers `ErrChildNotFound` for a
+   child the user is not linked to.
 
 ## Drivers
 

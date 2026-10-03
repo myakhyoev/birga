@@ -19,11 +19,18 @@ import (
 	"gitlab.com/loyihalar/birga/backend/internal/redisstore"
 	"gitlab.com/loyihalar/birga/backend/internal/tokens"
 	activitycreator "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_creator"
+	activitydeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_deleter"
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
+	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
+	activityupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_updater"
+	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
+	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
+	streakgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/streak_getter"
+	tokenchecker "gitlab.com/loyihalar/birga/backend/internal/usecases/token_checker"
 	tokenrefresher "gitlab.com/loyihalar/birga/backend/internal/usecases/token_refresher"
 	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
 	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
@@ -184,6 +191,13 @@ type useCases struct {
 	activityCreator *activitycreator.UseCase
 	activityLister  *activitylister.UseCase
 	activityGetter  *activitygetter.UseCase
+	activityUpdater *activityupdater.UseCase
+	activityDeleter *activitydeleter.UseCase
+
+	activityRecommender *activityrecommender.UseCase
+	completionRecorder  *completionrecorder.UseCase
+	completionLister    *completionlister.UseCase
+	streakGetter        *streakgetter.UseCase
 
 	userCreator *usercreator.UseCase
 	userLister  *userlister.UseCase
@@ -196,6 +210,7 @@ type useCases struct {
 
 	signUp         *usersignup.UseCase
 	tokenRefresher *tokenrefresher.UseCase
+	tokenChecker   *tokenchecker.UseCase
 
 	// mediaUploader is nil when media uploads are disabled.
 	mediaUploader *mediauploader.UseCase
@@ -216,6 +231,14 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity()),
 		activityLister:  activitylister.New(l.Named("usecase.activity_lister"), store.Activity()),
 		activityGetter:  activitygetter.New(l.Named("usecase.activity_getter"), store.Activity()),
+		activityUpdater: activityupdater.New(l.Named("usecase.activity_updater"), store.Activity()),
+		activityDeleter: activitydeleter.New(l.Named("usecase.activity_deleter"), store.Activity()),
+
+		activityRecommender: activityrecommender.New(l.Named("usecase.activity_recommender"), store.Child(), store.Activity()),
+		completionRecorder: completionrecorder.New(l.Named("usecase.completion_recorder"),
+			store.Child(), store.Activity(), store.Completion()),
+		completionLister: completionlister.New(l.Named("usecase.completion_lister"), store.Child(), store.Completion()),
+		streakGetter:     streakgetter.New(l.Named("usecase.streak_getter"), store.Child(), store.Completion()),
 
 		userCreator: usercreator.New(l.Named("usecase.user_creator"), store.User()),
 		userLister:  userlister.New(l.Named("usecase.user_lister"), store.User()),
@@ -228,6 +251,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 
 		signUp:         usersignup.New(l.Named("usecase.user_signup"), cache.OTP(), store, store.User(), store.Auth(), jwt),
 		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),
+		tokenChecker:   tokenchecker.New(l.Named("usecase.token_checker"), jwt, store.Auth()),
 
 		mediaUploader: mediaUploader,
 	}
@@ -250,6 +274,16 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 		ucs.activityCreator,
 		ucs.activityLister,
 		ucs.activityGetter,
+		rest.ActivityEditUseCases{
+			Updater: ucs.activityUpdater,
+			Deleter: ucs.activityDeleter,
+		},
+		rest.ChildActivityUseCases{
+			Recommender: ucs.activityRecommender,
+			Recorder:    ucs.completionRecorder,
+			Lister:      ucs.completionLister,
+			Streak:      ucs.streakGetter,
+		},
 		rest.UserUseCases{
 			Creator: ucs.userCreator,
 			Lister:  ucs.userLister,
@@ -264,6 +298,7 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 		rest.AuthUseCases{
 			SignUp:    ucs.signUp,
 			Refresher: ucs.tokenRefresher,
+			Checker:   ucs.tokenChecker,
 		},
 		media,
 	)

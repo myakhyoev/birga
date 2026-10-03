@@ -25,9 +25,9 @@ Every response, success or failure, has the same shape:
 | 0 | 200 | success | |
 | -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
-| -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; invalid, expired or revoked refresh token |
+| -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured); sign-up without a verified phone number |
-| -30 | 404 | not found | unknown id, unpublished activity on a public endpoint, soft-deleted user, OTP expired or not requested |
+| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, OTP expired or not requested |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
@@ -42,6 +42,7 @@ request id.
 |---|---|---|
 | `X-Request-Id` | request (optional) and response | correlates a call with server log lines; generated if absent |
 | `X-Admin-Key` | request | admin key for `/v1/admin/*` |
+| `Authorization: Bearer <access_token>` | request | signed-in user for `/v1/children/*` |
 | `Content-Type: application/json` | request | for bodies |
 
 CORS allows any origin.
@@ -53,6 +54,18 @@ CORS allows any origin.
 - Send `X-Admin-Key: <ADMIN_API_KEY>`. The comparison is constant-time.
 - Wrong or missing key: 401, code -20.
 - `ADMIN_API_KEY` not set on the server: every admin call returns 403, code -21.
+
+## User authentication
+
+Endpoints for a signed-in parent (today `/v1/children/{id}/...`) need the access token from
+`/v1/auth/signup` or `/v1/auth/refresh`:
+
+- Send `Authorization: Bearer <access_token>`.
+- The token must be validly signed, of type `access`, not expired, and still the latest access
+  token issued to the user (each refresh replaces the stored one, and deleting the user removes
+  it). Otherwise: 401, code -20. Refresh the token and retry.
+- A child id the user is not linked to (through `user_children`) answers 404, the same as a
+  child that does not exist, so other families' ids cannot be probed.
 
 ## Pagination
 
@@ -110,6 +123,8 @@ curl 'localhost:8080/v1/activities?age=4&goal=cognitive&limit=10'
 | POST | `/v1/admin/activities` | create an activity |
 | GET | `/v1/admin/activities` | list all activities, including unpublished (same filters) |
 | GET | `/v1/admin/activities/{id}` | one activity, including unpublished |
+| PATCH | `/v1/admin/activities/{id}` | change some fields, including publishing or unpublishing |
+| DELETE | `/v1/admin/activities/{id}` | soft-delete an activity |
 
 Create body:
 
@@ -141,6 +156,97 @@ curl -X POST localhost:8080/v1/admin/activities \
   -H 'X-Admin-Key: change-me' -H 'Content-Type: application/json' \
   -d @activity.json
 ```
+
+Update (`PATCH`) takes the same fields, all optional. Omitted or `null` fields are kept. Each
+given field follows the create rules (texts cannot be emptied); an age that is valid alone but
+not together with the stored one, such as `min_age` above the stored `max_age`, is rejected
+by the database check, also with 422. An empty body is 422 (`nothing to update`).
+`updated_at` is set on every update.
+
+```bash
+# publish
+curl -X PATCH localhost:8080/v1/admin/activities/$ID \
+  -H 'X-Admin-Key: change-me' -d '{"is_published": true}'
+```
+
+Delete sets `deleted_at`. The activity then disappears from every list, get and
+recommendation, and a second delete is 404. Completions that point at it are kept, so a
+child's history and streak do not change. There is no undelete endpoint.
+
+### Children: recommendation, completions, streak (signed in)
+
+All of these need [user authentication](#user-authentication) and a child linked to the
+caller. Days are calendar days in Uzbekistan time (UTC+5, `domain.Location`).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/children/{id}/recommendation` | today's activity for the child |
+| POST | `/v1/children/{id}/completions` | mark an activity done today, with an optional reflection note |
+| GET | `/v1/children/{id}/completions` | the child's completions, newest first (paged) |
+| GET | `/v1/children/{id}/streak` | streak and progress counters |
+
+Child profiles have no endpoints yet, so a client cannot create or link a child through the
+API. Until it can, create them with the `store.Child()` repository or SQL.
+
+#### Recommendation
+
+Query parameters, both optional:
+
+| Param | Type | Rules |
+|---|---|---|
+| `goal` | string | one of the goals; 422 otherwise |
+| `minutes` | int | time available; keeps activities with `duration_minutes <= minutes`; 400 if not an integer, 422 if negative |
+
+Rules (`activityRepo.Recommend`), all in one query:
+
+1. Candidates are published, non-deleted activities whose age range contains the child's age.
+   The age is clamped to 2..6 first, so a 1-year-old gets 2-year activities and a 7-year-old
+   gets 6-year ones.
+2. Activities the child has never completed come first, then the one completed longest ago.
+3. Ties are broken by `md5(activity id || child id || date)`, so the pick stays the same all
+   day, changes the next day, and differs between children. Completing it moves it to the
+   back, so asking again after a completion suggests the next activity.
+
+No candidate: 404, `no published activity matches this child's age and the filters`.
+Response: an [activity object](#activity-object).
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  'localhost:8080/v1/children/'$CHILD'/recommendation?goal=emotional&minutes=10'
+```
+
+#### Complete
+
+```json
+{"activity_id": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11", "note": "Qizil rangni birinchi topdi"}
+```
+
+- `activity_id` must be a UUID (422) of a published, non-deleted activity (404).
+- `note` is the caregiver's optional reflection: trimmed, blank means none, at most 1000
+  characters (422).
+- The completion is for today. Sending the same activity again on the same day returns the
+  existing completion, replacing its note when a new one is sent; it is never counted twice.
+
+Response: a [completion object](#completion-object).
+
+#### Streak
+
+Response:
+
+```json
+{"current": 3, "longest": 7, "completed_today": true, "this_week": 2, "total": 12, "last_completed_on": "2026-10-03"}
+```
+
+| Field | Meaning |
+|---|---|
+| `current` | consecutive days with at least one completion, ending today; while today has none yet it ends yesterday, so the streak is only lost after a whole day is missed |
+| `longest` | the longest such run ever |
+| `completed_today` | at least one completion today |
+| `this_week` | days with a completion since Monday (the concept favours weekly goals of 2 to 5 activities over daily perfection) |
+| `total` | all completions |
+| `last_completed_on` | date of the latest completion, `null` before the first |
+
+Pausing or repairing a streak is not built yet.
 
 ### OTP (public)
 
@@ -246,8 +352,8 @@ Sign-up and access token refresh. Tokens are HS256 JWTs signed with `JWT_SECRET`
 Token claims: `sub` is the user id, `typ` is `access` or `refresh`, plus `iss`
 (`JWT_ISSUER`), `iat`, `exp` and a unique `jti`. An access token lives `JWT_ACCESS_TTL`
 (15 min), a refresh token `JWT_REFRESH_TTL` (30 days). A token of one type is rejected where
-the other is expected. No endpoint checks access tokens yet; when one does, the client will
-send `Authorization: Bearer <access_token>`.
+the other is expected. Endpoints for signed-in users take the access token as
+`Authorization: Bearer <access_token>`; see [User authentication](#user-authentication).
 
 #### Sign up
 
@@ -455,3 +561,17 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `duration_minutes` | int | |
 | `is_published` | bool | hidden from public endpoints when false |
 | `created_at`, `updated_at` | RFC 3339 timestamp | |
+
+Soft-deleted activities are never returned, so `deleted_at` is not part of the object.
+
+### Completion object
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID string | |
+| `child_id` | UUID string | |
+| `activity_id` | UUID string | may point at an activity deleted since |
+| `user_id` | UUID string or `null` | the parent who marked it; `null` if that user was hard-deleted |
+| `completed_on` | date `YYYY-MM-DD` | day in Uzbekistan time |
+| `note` | string or `null` | caregiver's reflection |
+| `created_at` | RFC 3339 timestamp | first time it was marked that day |

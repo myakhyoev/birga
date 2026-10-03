@@ -20,6 +20,10 @@ import (
 // @securityDefinitions.apikey AdminKey
 // @in header
 // @name X-Admin-Key
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Access token from /v1/auth/signup or /v1/auth/refresh, as "Bearer <token>".
 func main() {
 	var cfg config.Application
 	if err := envconfig.Process(context.Background(), &cfg); err != nil {
