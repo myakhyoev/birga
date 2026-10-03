@@ -41,6 +41,35 @@ type activityGetter interface {
 	Execute(ctx context.Context, id string, includeUnpublished bool) (domain.Activity, error)
 }
 
+type userCreator interface {
+	Execute(ctx context.Context, u domain.User) (domain.User, error)
+}
+
+type userLister interface {
+	Execute(ctx context.Context, f domain.UserFilter) ([]domain.User, int, error)
+}
+
+type userGetter interface {
+	Execute(ctx context.Context, id string) (domain.User, error)
+}
+
+type userUpdater interface {
+	Execute(ctx context.Context, id string, upd domain.UserUpdate) (domain.User, error)
+}
+
+type userDeleter interface {
+	Execute(ctx context.Context, id string) error
+}
+
+// UserUseCases groups the use cases behind the /v1/admin/users endpoints.
+type UserUseCases struct {
+	Creator userCreator
+	Lister  userLister
+	Getter  userGetter
+	Updater userUpdater
+	Deleter userDeleter
+}
+
 type Server struct {
 	l          logger.Logger
 	router     *gin.Engine
@@ -51,6 +80,12 @@ type Server struct {
 	activityCreator activityCreator
 	activityLister  activityLister
 	activityGetter  activityGetter
+
+	userCreator userCreator
+	userLister  userLister
+	userGetter  userGetter
+	userUpdater userUpdater
+	userDeleter userDeleter
 }
 
 func New(cfg config.Application,
@@ -59,6 +94,7 @@ func New(cfg config.Application,
 	activityCreator activityCreator,
 	activityLister activityLister,
 	activityGetter activityGetter,
+	users UserUseCases,
 ) *Server {
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -81,6 +117,11 @@ func New(cfg config.Application,
 		activityCreator: activityCreator,
 		activityLister:  activityLister,
 		activityGetter:  activityGetter,
+		userCreator:     users.Creator,
+		userLister:      users.Lister,
+		userGetter:      users.Getter,
+		userUpdater:     users.Updater,
+		userDeleter:     users.Deleter,
 	}
 
 	s.httpServer = &http.Server{

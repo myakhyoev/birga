@@ -23,5 +23,11 @@ func (s *Server) endpoints() {
 		admin.POST("/activities", s.CreateActivity())
 		admin.GET("/activities", s.AdminListActivities())
 		admin.GET("/activities/:id", s.AdminGetActivity())
+
+		admin.POST("/users", s.CreateUser())
+		admin.GET("/users", s.ListUsers())
+		admin.GET("/users/:id", s.GetUser())
+		admin.PATCH("/users/:id", s.UpdateUser())
+		admin.DELETE("/users/:id", s.DeleteUser())
 	}
 }

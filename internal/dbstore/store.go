@@ -20,6 +20,7 @@ func New(db *pgxpool.Pool) *DBStore {
 	s := &DBStore{db: db}
 
 	s.activityRepo = &activityRepo{store: s}
+	s.userRepo = &userRepo{store: s}
 
 	return s
 }
@@ -28,10 +29,15 @@ type DBStore struct {
 	db *pgxpool.Pool
 
 	activityRepo *activityRepo
+	userRepo     *userRepo
 }
 
 func (s *DBStore) Activity() *activityRepo {
 	return s.activityRepo
+}
+
+func (s *DBStore) User() *userRepo {
+	return s.userRepo
 }
 
 // Ping checks database connectivity (used by the health endpoint).

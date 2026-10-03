@@ -6,8 +6,8 @@ caregiver's goal, available time), and tracks completions and streaks. Content i
 and Russian.
 
 This repository is the Go API behind the app. Today it serves the activity catalogue and a
-small admin API for adding activities. The `users` and `user_auth` tables exist; accounts
-(endpoints), child profiles, completions and phone sign-in are the next features.
+small admin API for managing activities and users (create, read, update, soft delete). Child
+profiles, completions and phone sign-in are the next features.
 
 ## Start here
 

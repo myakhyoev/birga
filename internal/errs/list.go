@@ -11,4 +11,8 @@ var (
 	ErrConnection   = New("connection error")
 
 	ErrActivityNotFound = Errf(ErrNotFound, "activity not found")
+
+	ErrUserNotFound     = Errf(ErrNotFound, "user not found")
+	ErrUsernameTaken    = Errf(ErrConflict, "username is already taken")
+	ErrPhoneNumberTaken = Errf(ErrConflict, "phone number is already taken")
 )

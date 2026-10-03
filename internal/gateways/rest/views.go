@@ -74,6 +74,13 @@ type NotFoundResponse struct {
 	Data      any        `json:"data"`
 }
 
+type ConflictResponse struct {
+	Status    statusType `json:"status" example:"Failure"`
+	ErrorCode errCode    `json:"error_code" example:"-40"`
+	ErrorNote string     `json:"error_note" example:"username is already taken"`
+	Data      any        `json:"data"`
+}
+
 type ServiceUnavailableResponse struct {
 	Status    statusType `json:"status" example:"Failure"`
 	ErrorCode errCode    `json:"error_code" example:"-60"`

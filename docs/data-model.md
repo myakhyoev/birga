@@ -55,7 +55,7 @@ setting `deleted_at`.
 | `phone_number` | `VARCHAR(15)` | yes | | E.164 length limit; unique among non-deleted users |
 | `photo_id` | `UUID` | yes | | id of the profile photo; no foreign key yet (no files table) |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
-| `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | not updated automatically |
+| `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
 
 Indexes:
@@ -65,6 +65,12 @@ Indexes:
 - `users_phone_number_uniq`: unique on `(phone_number) WHERE deleted_at IS NULL`
 
 The partial unique indexes let a soft-deleted user's username or phone number be reused.
+
+Application rules not enforced by the database (see [api.md](api.md#users-admin)):
+`phone_number` is required on create and E.164; `username` is stored lowercase and matches
+`[a-z0-9_.]{3,32}`; `name` is at most 100 characters. `internal/dbstore/user.go` reads only
+rows with `deleted_at IS NULL` and maps violations of `users_username_uniq` and
+`users_phone_number_uniq` to 409 conflicts.
 
 ### `user_auth`
 

@@ -15,6 +15,11 @@ import (
 	activitycreator "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_creator"
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
+	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
+	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
+	usergetter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_getter"
+	userlister "gitlab.com/loyihalar/birga/backend/internal/usecases/user_lister"
+	userupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/user_updater"
 	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
 )
 
@@ -71,6 +76,12 @@ type useCases struct {
 	activityCreator *activitycreator.UseCase
 	activityLister  *activitylister.UseCase
 	activityGetter  *activitygetter.UseCase
+
+	userCreator *usercreator.UseCase
+	userLister  *userlister.UseCase
+	userGetter  *usergetter.UseCase
+	userUpdater *userupdater.UseCase
+	userDeleter *userdeleter.UseCase
 }
 
 func buildUseCases(l *zap.Logger, store *dbstore.DBStore, _ *drivers) *useCases {
@@ -78,6 +89,12 @@ func buildUseCases(l *zap.Logger, store *dbstore.DBStore, _ *drivers) *useCases 
 		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity()),
 		activityLister:  activitylister.New(l.Named("usecase.activity_lister"), store.Activity()),
 		activityGetter:  activitygetter.New(l.Named("usecase.activity_getter"), store.Activity()),
+
+		userCreator: usercreator.New(l.Named("usecase.user_creator"), store.User()),
+		userLister:  userlister.New(l.Named("usecase.user_lister"), store.User()),
+		userGetter:  usergetter.New(l.Named("usecase.user_getter"), store.User()),
+		userUpdater: userupdater.New(l.Named("usecase.user_updater"), store.User()),
+		userDeleter: userdeleter.New(l.Named("usecase.user_deleter"), store.User()),
 	}
 }
 
@@ -89,6 +106,13 @@ func initREST(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, ucs
 		ucs.activityCreator,
 		ucs.activityLister,
 		ucs.activityGetter,
+		rest.UserUseCases{
+			Creator: ucs.userCreator,
+			Lister:  ucs.userLister,
+			Getter:  ucs.userGetter,
+			Updater: ucs.userUpdater,
+			Deleter: ucs.userDeleter,
+		},
 	)
 
 	return httpSrv, func() {

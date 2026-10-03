@@ -22,6 +22,8 @@ const (
 	testID       = "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
 )
 
+var adminJSON = map[string]string{adminKeyHeader: testAdminKey, "Content-Type": "application/json"}
+
 type fakeHealth struct{ err error }
 
 func (f *fakeHealth) Ping(context.Context) error { return f.err }
@@ -65,13 +67,20 @@ type deps struct {
 	creator *fakeCreator
 	lister  *fakeLister
 	getter  *fakeGetter
+	users   *fakeUsers
 }
 
 func newTestServer(adminKey string) (*Server, *deps) {
 	gin.SetMode(gin.TestMode)
 
-	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}}
-	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter)
+	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}}
+	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter, UserUseCases{
+		Creator: userCreatorFunc(d.users.create),
+		Lister:  userListerFunc(d.users.list),
+		Getter:  userGetterFunc(d.users.get),
+		Updater: userUpdaterFunc(d.users.update),
+		Deleter: userDeleterFunc(d.users.delete),
+	})
 
 	return s, d
 }
@@ -173,7 +182,7 @@ func TestAdminAuth(t *testing.T) {
 
 func TestCreateActivity(t *testing.T) {
 	s, d := newTestServer(testAdminKey)
-	auth := map[string]string{adminKeyHeader: testAdminKey, "Content-Type": "application/json"}
+	auth := adminJSON
 
 	body := `{"title_uz":"T","title_ru":"Т","description_uz":"D","description_ru":"Д","goal":"motor","min_age":2,"max_age":4,"duration_minutes":5}`
 	if code, r := do(t, s, http.MethodPost, "/v1/admin/activities", body, auth); code != http.StatusOK || r.Status != _statusSuccess {

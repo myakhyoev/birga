@@ -15,6 +15,21 @@ definitions:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
     type: object
+  rest.ConflictResponse:
+    properties:
+      data: {}
+      error_code:
+        allOf:
+        - $ref: '#/definitions/rest.errCode'
+        example: -40
+      error_note:
+        example: username is already taken
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/rest.statusType'
+        example: Failure
+    type: object
   rest.CreateActivityRequest:
     properties:
       description_ru:
@@ -55,6 +70,21 @@ definitions:
         type: string
       title_uz:
         example: Rangli toshlar
+        type: string
+    type: object
+  rest.CreateUserRequest:
+    properties:
+      name:
+        example: Dilnoza
+        type: string
+      phone_number:
+        example: "+998901234567"
+        type: string
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      username:
+        example: dilnoza_95
         type: string
     type: object
   rest.InternalServerErrorResponse:
@@ -141,6 +171,21 @@ definitions:
         allOf:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
+    type: object
+  rest.UpdateUserRequest:
+    properties:
+      name:
+        example: Dilnoza
+        type: string
+      phone_number:
+        example: "+998901234567"
+        type: string
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      username:
+        example: dilnoza_95
+        type: string
     type: object
   rest.activityListView:
     properties:
@@ -243,6 +288,44 @@ definitions:
     x-enum-varnames:
     - _statusSuccess
     - _statusFailure
+  rest.userListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.userView'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 42
+        type: integer
+    type: object
+  rest.userView:
+    properties:
+      created_at:
+        type: string
+      id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      name:
+        example: Dilnoza
+        type: string
+      phone_number:
+        example: "+998901234567"
+        type: string
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      updated_at:
+        type: string
+      username:
+        example: dilnoza_95
+        type: string
+    type: object
 info:
   contact: {}
   description: Backend for the Birga caregiver app.
@@ -509,6 +592,237 @@ paths:
       security:
       - AdminKey: []
       summary: returns an activity, including unpublished
+      tags:
+      - admin
+  /v1/admin/users:
+    get:
+      parameters:
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.userListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: lists users (soft-deleted users are excluded)
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - phone_number is required, in E.164 format (+998901234567)
+        - username is optional: 3..32 latin letters, digits, '_' or '.'; stored lowercase
+        - name is optional, at most 100 characters; photo_id is an optional UUID
+        - username and phone_number must be unique among non-deleted users (409)
+      parameters:
+      - description: user
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.userView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/rest.ConflictResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: creates a user
+      tags:
+      - admin
+  /v1/admin/users/{id}:
+    delete:
+      description: |-
+        Sets deleted_at; the user disappears from reads, their tokens are removed,
+        and their username and phone number can be used again.
+      parameters:
+      - description: user id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: soft-deletes a user
+      tags:
+      - admin
+    get:
+      parameters:
+      - description: user id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.userView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: returns a user
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        - only the fields present in the body change; omitted or null fields are kept
+        - "" clears name, username or photo_id; phone_number cannot be cleared
+        - same format and uniqueness rules as create
+      parameters:
+      - description: user id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.userView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/rest.ConflictResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      summary: updates a user partially
       tags:
       - admin
 securityDefinitions:

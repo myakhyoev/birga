@@ -40,11 +40,11 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`) and constants (goals, age range) |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`), constants and format checks (goals, age range, username, phone) |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
 | `internal/dbstore/` | PostgreSQL repositories and the transaction helper |
 | `internal/drivers/` | clients for external services, one package each (`sms_service`) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister` |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -90,6 +90,10 @@ Middleware order on every request (`gateways/rest/server.go`):
 A handler parses input, calls one use case, and passes the result to `rest.Return`, which
 writes the response envelope.
 
+`rest.New` takes each activity use case as its own argument; the user use cases come grouped
+in `rest.UserUseCases` (creator, lister, getter, updater, deleter). Group the use cases of
+new resources the same way rather than growing the argument list.
+
 ## Errors
 
 All errors that should reach a client are `*errs.Error` values that wrap a sentinel from
@@ -105,12 +109,17 @@ The full mapping table is in [api.md](api.md#errors).
 
 ## Database access
 
-- Repositories hang off `DBStore` (`store.Activity()`).
+- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`).
 - `DBStore.InTx(ctx, fn)` runs `fn` in a read-committed transaction. Repository calls made
   with the `ctx` that `fn` receives join the transaction automatically
   (`sqlClientByCtx` picks the `pgx.Tx` from the context, or the pool otherwise).
-- Queries use positional parameters only; dynamic filters build the `WHERE` clause from
-  fixed fragments (`activityWhere`), so values never enter the SQL text.
+- Queries use positional parameters only; dynamic filters and partial updates build the
+  `WHERE` / `SET` clause from fixed fragments (`activityWhere`, `userSet`), so values never
+  enter the SQL text.
+- Soft-deletable tables (`users`) are filtered with `deleted_at IS NULL` in every
+  repository query, and delete is an `UPDATE ... SET deleted_at = NOW()`.
+- A unique-index violation (`23505`) is mapped to a specific `errs.ErrConflict` error by
+  constraint name (`userConflict`), which the gateway turns into a 409.
 - Rows scan into `db*` structs with `db:"..."` tags and convert to domain types with
   `toDomain()`.
 
