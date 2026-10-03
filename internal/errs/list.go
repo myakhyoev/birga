@@ -22,6 +22,9 @@ var (
 	ErrOTPNotFound           = Errf(ErrNotFound, "code expired or was not requested, request a new one")
 	ErrOTPTooManyAttempts    = Errf(ErrRateLimited, "too many wrong codes, request a new one")
 
+	ErrPhoneNotVerified    = Errf(ErrForbidden, "phone number is not verified, verify a sign_up code with /v1/otp/verify first")
+	ErrInvalidRefreshToken = Errf(ErrUnauthorized, "refresh token is invalid or expired, sign in again")
+
 	ErrMediaUnsupportedType = Errf(ErrValidation, "unsupported file type, upload a JPEG, PNG or WebP image")
 	ErrMediaEmpty           = Errf(ErrValidation, "file is empty")
 )

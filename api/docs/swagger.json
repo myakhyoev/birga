@@ -792,6 +792,152 @@
                 }
             }
         },
+        "/v1/auth/refresh": {
+            "post": {
+                "description": "- refresh_token must be signed by this API, unexpired, of type refresh, and still the\none stored for the user (a deleted user's token stops working); otherwise 401\n- the refresh token is not rotated; keep using it until it expires",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "trades a refresh token for a new access token",
+                "parameters": [
+                    {
+                        "description": "refresh token from sign-up",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.accessTokenView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/signup": {
+            "post": {
+                "description": "- the phone number must be verified first: POST /v1/otp/send and /v1/otp/verify with\npurpose sign_up; the verification lasts OTP_VERIFIED_TTL (default 10 minutes) and is\nused up by a successful sign-up. Not verified: 403\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,\ndefault 30 days) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "creates a user and returns their tokens",
+                "parameters": [
+                    {
+                        "description": "new user",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.SignUpRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tokenPairView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/media": {
             "post": {
                 "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from\n- 503 when S3 is not configured (S3_BUCKET empty)",
@@ -1130,6 +1276,32 @@
                 }
             }
         },
+        "rest.ForbiddenResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -21
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "phone number is not verified, verify a sign_up code with /v1/otp/verify first"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
         "rest.InternalServerErrorResponse": {
             "type": "object",
             "properties": {
@@ -1197,6 +1369,15 @@
                 }
             }
         },
+        "rest.RefreshTokenRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
         "rest.SendOTPRequest": {
             "type": "object",
             "properties": {
@@ -1241,6 +1422,27 @@
                         }
                     ],
                     "example": "Failure"
+                }
+            }
+        },
+        "rest.SignUpRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Dilnoza"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "s3cret-pass"
+                },
+                "phone_number": {
+                    "type": "string",
+                    "example": "+998901234567"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "dilnoza_k"
                 }
             }
         },
@@ -1361,6 +1563,20 @@
                         "update_user"
                     ],
                     "example": "sign_up"
+                }
+            }
+        },
+        "rest.accessTokenView": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "expires_in": {
+                    "description": "seconds until the access token expires",
+                    "type": "integer",
+                    "example": 900
                 }
             }
         },
@@ -1534,6 +1750,24 @@
                 "_statusSuccess",
                 "_statusFailure"
             ]
+        },
+        "rest.tokenPairView": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "expires_in": {
+                    "description": "seconds until the access token expires",
+                    "type": "integer",
+                    "example": 900
+                },
+                "refresh_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
         },
         "rest.userListView": {
             "type": "object",

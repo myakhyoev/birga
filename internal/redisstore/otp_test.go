@@ -117,7 +117,7 @@ func TestVerifyCode(t *testing.T) {
 	verify := func(hash string) (domain.OTPVerifyOutcome, int) {
 		t.Helper()
 
-		out, left, err := s.OTP().VerifyCode(ctx, phone, domain.OTPPurposeSignUp, hash, 3)
+		out, left, err := s.OTP().VerifyCode(ctx, phone, domain.OTPPurposeSignUp, hash, 3, 10*time.Minute)
 		if err != nil {
 			t.Fatalf("VerifyCode: %v", err)
 		}
@@ -142,7 +142,7 @@ func TestVerifyCode(t *testing.T) {
 	}
 
 	// Another purpose's code is not this one.
-	if out, _, _ := s.OTP().VerifyCode(ctx, phone, domain.OTPPurposeUpdateUser, "good", 3); out != domain.OTPNotFound {
+	if out, _, _ := s.OTP().VerifyCode(ctx, phone, domain.OTPPurposeUpdateUser, "good", 3, 10*time.Minute); out != domain.OTPNotFound {
 		t.Fatalf("other purpose: %v", out)
 	}
 
@@ -169,5 +169,40 @@ func TestVerifyCode(t *testing.T) {
 
 	if out, _ := verify("good"); out != domain.OTPNotFound {
 		t.Fatalf("expired: %v", out)
+	}
+}
+
+func TestVerifyCode_MarksVerified(t *testing.T) {
+	s, mr := newStore(t)
+	ctx := context.Background()
+
+	isVerified := func(purpose domain.OTPPurpose) bool {
+		t.Helper()
+
+		v, err := s.OTP().IsVerified(ctx, phone, purpose)
+		if err != nil {
+			t.Fatalf("IsVerified: %v", err)
+		}
+
+		return v
+	}
+
+	_ = s.OTP().SaveCode(ctx, phone, domain.OTPPurposeSignUp, "good", 2*time.Minute)
+
+	if out, _, _ := s.OTP().VerifyCode(ctx, phone, domain.OTPPurposeSignUp, "bad", 3, 10*time.Minute); out != domain.OTPMismatch || isVerified(domain.OTPPurposeSignUp) {
+		t.Fatalf("wrong code must not verify: %v", out)
+	}
+
+	if out, _, _ := s.OTP().VerifyCode(ctx, phone, domain.OTPPurposeSignUp, "good", 3, 10*time.Minute); out != domain.OTPMatched {
+		t.Fatalf("match: %v", out)
+	}
+
+	// A match marks the phone verified for this purpose only, for the verified TTL.
+	if ttl := mr.TTL(verifiedKey(phone, domain.OTPPurposeSignUp)); ttl != 10*time.Minute || isVerified(domain.OTPPurposeUpdateUser) {
+		t.Fatalf("verified ttl = %v", ttl)
+	}
+
+	if err := s.OTP().ConsumeVerified(ctx, phone, domain.OTPPurposeSignUp); err != nil || isVerified(domain.OTPPurposeSignUp) {
+		t.Fatalf("ConsumeVerified: %v", err)
 	}
 }

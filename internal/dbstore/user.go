@@ -192,7 +192,7 @@ func nullIfEmpty(s string) *string {
 	return &s
 }
 
-// userConflict maps a unique-index violation to the matching conflict error, and a photo_id
+// userConflict maps a unique-index violation (users or user_auth) to the matching conflict error, and a photo_id
 // with no media row to ErrPhotoNotFound. It returns nil for any other error.
 func userConflict(err error) error {
 	var pgErr *pgconn.PgError
@@ -209,7 +209,7 @@ func userConflict(err error) error {
 	}
 
 	switch pgErr.ConstraintName {
-	case "users_username_uniq":
+	case "users_username_uniq", "user_auth_username_uniq":
 		return errs.ErrUsernameTaken
 	case "users_phone_number_uniq":
 		return errs.ErrPhoneNumberTaken

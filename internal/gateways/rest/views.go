@@ -68,6 +68,13 @@ type UnauthorizedResponse struct {
 	Data      any        `json:"data"`
 }
 
+type ForbiddenResponse struct {
+	Status    statusType `json:"status" example:"Failure"`
+	ErrorCode errCode    `json:"error_code" example:"-21"`
+	ErrorNote string     `json:"error_note" example:"phone number is not verified, verify a sign_up code with /v1/otp/verify first"`
+	Data      any        `json:"data"`
+}
+
 type NotFoundResponse struct {
 	Status    statusType `json:"status" example:"Failure"`
 	ErrorCode errCode    `json:"error_code" example:"-30"`

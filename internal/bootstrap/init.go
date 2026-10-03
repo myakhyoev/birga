@@ -17,16 +17,19 @@ import (
 	"gitlab.com/loyihalar/birga/backend/internal/drivers/smslog"
 	"gitlab.com/loyihalar/birga/backend/internal/gateways/rest"
 	"gitlab.com/loyihalar/birga/backend/internal/redisstore"
+	"gitlab.com/loyihalar/birga/backend/internal/tokens"
 	activitycreator "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_creator"
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
+	tokenrefresher "gitlab.com/loyihalar/birga/backend/internal/usecases/token_refresher"
 	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
 	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
 	usergetter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_getter"
 	userlister "gitlab.com/loyihalar/birga/backend/internal/usecases/user_lister"
+	usersignup "gitlab.com/loyihalar/birga/backend/internal/usecases/user_signup"
 	userupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/user_updater"
 	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
 )
@@ -191,6 +194,9 @@ type useCases struct {
 	otpSender   *otpsender.UseCase
 	otpVerifier *otpverifier.UseCase
 
+	signUp         *usersignup.UseCase
+	tokenRefresher *tokenrefresher.UseCase
+
 	// mediaUploader is nil when media uploads are disabled.
 	mediaUploader *mediauploader.UseCase
 }
@@ -199,6 +205,11 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 	var mediaUploader *mediauploader.UseCase
 	if drv.s3 != nil {
 		mediaUploader = mediauploader.New(l.Named("usecase.media_uploader"), store.Media(), drv.s3, cfg.Media.MaxSize, cfg.S3.KeyPrefix)
+	}
+
+	jwt, err := tokens.New(*cfg.JWT)
+	if err != nil {
+		l.Fatal("tokens.New", zap.Error(err))
 	}
 
 	return &useCases{
@@ -214,6 +225,9 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), *cfg.OTP, cache.OTP()),
+
+		signUp:         usersignup.New(l.Named("usecase.user_signup"), cache.OTP(), store, store.User(), store.Auth(), jwt),
+		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),
 
 		mediaUploader: mediaUploader,
 	}
@@ -246,6 +260,10 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 		rest.OTPUseCases{
 			Sender:   ucs.otpSender,
 			Verifier: ucs.otpVerifier,
+		},
+		rest.AuthUseCases{
+			SignUp:    ucs.signUp,
+			Refresher: ucs.tokenRefresher,
 		},
 		media,
 	)

@@ -20,6 +20,9 @@ func (s *Server) endpoints() {
 		v1.POST("/otp/send", s.SendOTP())
 		v1.POST("/otp/verify", s.VerifyOTP())
 
+		v1.POST("/auth/signup", s.SignUp())
+		v1.POST("/auth/refresh", s.RefreshToken())
+
 		v1.POST("/media", s.UploadMedia())
 	}
 

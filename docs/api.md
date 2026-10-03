@@ -25,10 +25,10 @@ Every response, success or failure, has the same shape:
 | 0 | 200 | success | |
 | -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
-| -20 | 401 | unauthorized | missing or wrong `X-Admin-Key` |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured) |
+| -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; invalid, expired or revoked refresh token |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured); sign-up without a verified phone number |
 | -30 | 404 | not found | unknown id, unpublished activity on a public endpoint, soft-deleted user, OTP expired or not requested |
-| -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken` |
+| -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
 | -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or IP, too many wrong OTP codes |
@@ -214,13 +214,15 @@ A malformed field returns 422 before the code is looked up.
 
 | Result | HTTP | error_code | error_note |
 |---|---:|---:|---|
-| code matches; it is deleted and cannot be used again | 200 | 0 | `data` is `null` |
+| code matches; it is deleted and cannot be used again, and the phone is marked verified for the purpose for `OTP_VERIFIED_TTL` (10 min) | 200 | 0 | `data` is `null` |
 | wrong code | 422 | -10 | `wrong code, N attempts left` |
 | wrong code and no attempts left (`OTP_MAX_VERIFY_ATTEMPTS`, 5); the code is deleted | 429 | -70 | `too many wrong codes, request a new one` |
 | no code: never sent, expired, already used, or deleted after too many attempts | 404 | -30 | `code expired or was not requested, request a new one` |
 
 The comparison runs as one Redis script, so two parallel requests cannot both use a code.
-Verify does not yet return a token that later calls (sign-up, profile update) can check.
+The verified mark is a Redis key (see [data-model.md](data-model.md#redis-keys)) rather than a
+token in the response: `POST /v1/auth/signup` checks it for `sign_up`; nothing reads the
+`update_user` mark yet.
 
 Examples:
 
@@ -230,6 +232,80 @@ curl -X POST localhost:8080/v1/otp/send -H 'Content-Type: application/json' \
 
 curl -X POST localhost:8080/v1/otp/verify -H 'Content-Type: application/json' \
   -d '{"phone_number": "+998901234567", "purpose": "sign_up", "code": "480569"}'
+```
+
+### Auth (public)
+
+Sign-up and access token refresh. Tokens are HS256 JWTs signed with `JWT_SECRET`.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/auth/signup` | create a user whose phone number was verified, return access and refresh tokens |
+| POST | `/v1/auth/refresh` | trade a refresh token for a new access token |
+
+Token claims: `sub` is the user id, `typ` is `access` or `refresh`, plus `iss`
+(`JWT_ISSUER`), `iat`, `exp` and a unique `jti`. An access token lives `JWT_ACCESS_TTL`
+(15 min), a refresh token `JWT_REFRESH_TTL` (30 days). A token of one type is rejected where
+the other is expected. No endpoint checks access tokens yet; when one does, the client will
+send `Authorization: Bearer <access_token>`.
+
+#### Sign up
+
+Flow: `POST /v1/otp/send` and `POST /v1/otp/verify` with `purpose: sign_up`, then within
+`OTP_VERIFIED_TTL` (10 min):
+
+```json
+{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567"}
+```
+
+| Field | Rules |
+|---|---|
+| `name` | required, at most 100 characters, trimmed |
+| `username` | 3 to 32 of `a-z`, `0-9`, `_`, `.`; trimmed and lowercased |
+| `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
+| `phone_number` | Uzbek number, `+998` and 9 digits; must be the verified one |
+
+Response `data`:
+
+```json
+{"access_token": "eyJ...", "refresh_token": "eyJ...", "expires_in": 900}
+```
+
+`expires_in` is the access token lifetime in seconds.
+
+Behaviour (`usecases/user_signup`):
+
+| Result | HTTP | error_code | error_note |
+|---|---:|---:|---|
+| invalid field | 422 | -10 | which field and why |
+| no `sign_up` verification for the phone (never verified, expired, or already used by a sign-up) | 403 | -21 | `phone number is not verified, verify a sign_up code with /v1/otp/verify first` |
+| username or phone number belongs to an active user | 409 | -40 | `username is already taken` / `phone number is already taken` |
+
+- The `users` row (name, username, phone) and the `user_auth` row (username, bcrypt password,
+  SHA-256 hashes of both tokens) are written in one transaction.
+- The verified mark is deleted only after the user is stored, so a sign-up that fails (for
+  example a taken username) can be retried with another username without a new code.
+
+#### Refresh
+
+```json
+{"refresh_token": "eyJ..."}
+```
+
+Response `data`: `{"access_token": "eyJ...", "expires_in": 900}`.
+
+The refresh token must be signed with `JWT_SECRET`, unexpired, of type `refresh`, and its
+SHA-256 must equal `user_auth.refresh_token` for the user in `sub`. Anything else, including a
+soft-deleted user (their `user_auth` row is gone), is 401 (-20) `refresh token is invalid or
+expired, sign in again`. The new access token's hash replaces `user_auth.access_token`. The
+refresh token is not rotated; the client keeps it until it expires.
+
+```bash
+curl -X POST localhost:8080/v1/auth/signup -H 'Content-Type: application/json' \
+  -d '{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567"}'
+
+curl -X POST localhost:8080/v1/auth/refresh -H 'Content-Type: application/json' \
+  -d '{"refresh_token": "eyJ..."}'
 ```
 
 ### Media (public)

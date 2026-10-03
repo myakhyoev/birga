@@ -83,6 +83,20 @@ type mediaUploader interface {
 	MaxSize() int64
 }
 
+type signUp interface {
+	Execute(ctx context.Context, req domain.SignUpRequest) (domain.TokenPair, error)
+}
+
+type tokenRefresher interface {
+	Execute(ctx context.Context, refreshToken string) (domain.AccessToken, error)
+}
+
+// AuthUseCases groups the use cases behind the /v1/auth endpoints.
+type AuthUseCases struct {
+	SignUp    signUp
+	Refresher tokenRefresher
+}
+
 // OTPUseCases groups the use cases behind the /v1/otp endpoints.
 type OTPUseCases struct {
 	Sender   otpSender
@@ -109,6 +123,9 @@ type Server struct {
 	otpSender   otpSender
 	otpVerifier otpVerifier
 
+	signUp         signUp
+	tokenRefresher tokenRefresher
+
 	// mediaUploader is nil when S3 is not configured; POST /v1/media then answers 503.
 	mediaUploader mediaUploader
 }
@@ -121,6 +138,7 @@ func New(cfg config.Application,
 	activityGetter activityGetter,
 	users UserUseCases,
 	otp OTPUseCases,
+	auth AuthUseCases,
 	media mediaUploader,
 ) *Server {
 	if cfg.IsProduction() {
@@ -151,6 +169,8 @@ func New(cfg config.Application,
 		userDeleter:     users.Deleter,
 		otpSender:       otp.Sender,
 		otpVerifier:     otp.Verifier,
+		signUp:          auth.SignUp,
+		tokenRefresher:  auth.Refresher,
 		mediaUploader:   media,
 	}
 

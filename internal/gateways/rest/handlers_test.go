@@ -70,19 +70,21 @@ type deps struct {
 	users   *fakeUsers
 	otp     *fakeOTPSender
 	media   *fakeMedia
+	auth    *fakeAuth
 }
 
 func newTestServer(adminKey string) (*Server, *deps) {
 	gin.SetMode(gin.TestMode)
 
-	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}, otp: &fakeOTPSender{}, media: &fakeMedia{}}
+	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}, otp: &fakeOTPSender{}, media: &fakeMedia{}, auth: &fakeAuth{}}
 	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter, UserUseCases{
 		Creator: userCreatorFunc(d.users.create),
 		Lister:  userListerFunc(d.users.list),
 		Getter:  userGetterFunc(d.users.get),
 		Updater: userUpdaterFunc(d.users.update),
 		Deleter: userDeleterFunc(d.users.delete),
-	}, OTPUseCases{Sender: d.otp, Verifier: otpVerifierFunc(d.otp.verify)}, d.media)
+	}, OTPUseCases{Sender: d.otp, Verifier: otpVerifierFunc(d.otp.verify)},
+		AuthUseCases{SignUp: d.auth, Refresher: refresherFunc(d.auth.refresh)}, d.media)
 
 	return s, d
 }

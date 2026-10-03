@@ -84,6 +84,11 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `OTP_MAX_PER_PHONE_HOUR` | `5` | codes per phone per hour |
 | `OTP_MAX_PER_IP_HOUR` | `20` | codes per IP address per hour |
 | `OTP_MAX_VERIFY_ATTEMPTS` | `5` | wrong codes before the code is deleted |
+| `OTP_VERIFIED_TTL` | `10m` | how long a matched code marks the phone as verified; `POST /v1/auth/signup` needs a `sign_up` mark |
+| `JWT_SECRET` | **required** | HS256 key for access and refresh tokens, at least 32 bytes (the process exits otherwise). Generate with `openssl rand -hex 32`, keep it in the server's secret store. Changing it invalidates every issued token. `.env.example` has a development-only value |
+| `JWT_ISSUER` | `birga` | `iss` claim written into and required from every token |
+| `JWT_ACCESS_TTL` | `15m` | access token lifetime |
+| `JWT_REFRESH_TTL` | `720h` | refresh token lifetime (30 days) |
 | `S3_BUCKET` | empty | S3 bucket for uploaded media (profile photos). Empty disables `POST /v1/media` (it answers 503) |
 | `S3_REGION` | `eu-central-1` | AWS region of the bucket |
 | `S3_ACCESS_KEY_ID` | empty | IAM access key; set it together with `S3_SECRET_ACCESS_KEY`. Both empty means the AWS default credential chain (`AWS_*` variables, `~/.aws`, an instance or task role) |

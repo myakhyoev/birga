@@ -3,6 +3,7 @@ package otpverifier
 import (
 	"context"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -14,7 +15,7 @@ import (
 
 type otpStore interface {
 	VerifyCode(
-		ctx context.Context, phone string, purpose domain.OTPPurpose, hash string, maxAttempts int,
+		ctx context.Context, phone string, purpose domain.OTPPurpose, hash string, maxAttempts int, verifiedTTL time.Duration,
 	) (domain.OTPVerifyOutcome, int, error)
 }
 
@@ -30,7 +31,8 @@ func New(l logger.Logger, cfg config.OTPConfig, otps otpStore) *UseCase {
 	return &UseCase{l: l, cfg: cfg, otps: otps}
 }
 
-// Execute returns nil when the code matches; the code is then deleted and cannot be used again.
+// Execute returns nil when the code matches; the code is then deleted and cannot be used again,
+// and the phone stays verified for the purpose for OTP_VERIFIED_TTL (sign_up needs it).
 // A wrong code uses one of OTP_MAX_VERIFY_ATTEMPTS; after the last one the code is deleted too.
 func (uc *UseCase) Execute(ctx context.Context, req domain.OTPVerifyRequest) error {
 	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
@@ -42,7 +44,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPVerifyRequest) err
 
 	hash := domain.HashOTPCode(req.PhoneNumber, req.Purpose, req.Code)
 
-	outcome, left, err := uc.otps.VerifyCode(ctx, req.PhoneNumber, req.Purpose, hash, uc.cfg.MaxVerifyAttempts)
+	outcome, left, err := uc.otps.VerifyCode(ctx, req.PhoneNumber, req.Purpose, hash, uc.cfg.MaxVerifyAttempts, uc.cfg.VerifiedTTL)
 	if err != nil {
 		return err
 	}

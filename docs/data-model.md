@@ -76,14 +76,17 @@ rows with `deleted_at IS NULL` and maps violations of `users_username_uniq` and
 ### `user_auth`
 
 Authentication state for a user, one row per user. Created by
-`000002_create_users_tables`.
+`000002_create_users_tables`; `username` and `password` added by
+`000004_add_user_auth_credentials`. `POST /v1/auth/signup` inserts the row.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
 | `id` | `UUID` | no | | primary key and foreign key to `users(id)` |
 | `fcm_token` | `TEXT[]` | no | `'{}'` | Firebase Cloud Messaging tokens, one per device |
-| `access_token` | `TEXT` | yes | | current access token |
-| `refresh_token` | `TEXT` | yes | | current refresh token |
+| `access_token` | `TEXT` | yes | | SHA-256 (hex) of the newest access token (`domain.HashToken`) |
+| `refresh_token` | `TEXT` | yes | | SHA-256 (hex) of the current refresh token; `POST /v1/auth/refresh` accepts only this one |
+| `username` | `TEXT` | yes | | sign-in username, same value as `users.username` (kept in sync by `users_sync_auth_username_trg`) |
+| `password` | `TEXT` | yes | | bcrypt hash (`$2a$10$...`) of the password; the plain password is never stored |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | not updated automatically |
 
@@ -91,6 +94,10 @@ Constraints:
 
 - `id` references `users(id)` `ON DELETE CASCADE`: hard-deleting a user removes their
   auth row.
+- `user_auth_username_uniq`: unique on `(username)`. Rows of soft-deleted users are removed,
+  so their usernames are free again, matching `users_username_uniq`.
+
+Tokens are stored as hashes so a leaked table cannot be replayed as tokens.
 
 Triggers:
 
@@ -98,6 +105,9 @@ Triggers:
   user's `deleted_at` changes from `NULL` to a value, their `user_auth` row is deleted, so
   a soft delete also drops the user's tokens. Restoring the user (`deleted_at` back to
   `NULL`) does not bring the row back; they sign in again.
+- `users_sync_auth_username_trg` on `users` (function `users_sync_auth_username()`): when
+  `users.username` changes (for example through `PATCH /v1/admin/users/:id`), the same value
+  is written to `user_auth.username`.
 
 ### `media`
 
@@ -134,7 +144,7 @@ deleted again. Replaced photos are not cleaned up yet (no cleanup job).
 
 Short-lived state lives in Redis, not PostgreSQL (`internal/redisstore`). Every key starts
 with `birga:` so the instance can be shared. Nothing in Redis needs a backup: losing it only
-means users request a new code.
+means users request a new code (and verify again before signing up).
 
 | Key | Type | TTL | Holds |
 |---|---|---|---|
@@ -142,6 +152,7 @@ means users request a new code.
 | `birga:otp:cooldown:<purpose>:<phone>` | string | `OTP_RESEND_COOLDOWN` (1 min) | present while a new code may not be sent |
 | `birga:otp:limit:phone:<phone>` | counter | 1 hour from the first code | codes sent to the phone, any purpose |
 | `birga:otp:limit:ip:<ip>` | counter | 1 hour from the first code | codes requested from the IP (canonical form, e.g. `2001:db8::1`) |
+| `birga:otp:verified:<purpose>:<phone>` | string `1` | `OTP_VERIFIED_TTL` (10 min) | set by the verify script when a code matches; `POST /v1/auth/signup` requires the `sign_up` one and deletes it after creating the user |
 
 `<phone>` is E.164 (`+998901234567`), `<purpose>` is `sign_up` or `update_user`.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"gitlab.com/loyihalar/birga/backend/internal/config"
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
@@ -15,16 +16,17 @@ type fakeOTPs struct {
 	left        int
 	hash        string
 	maxAttempts int
+	verifiedTTL time.Duration
 	called      bool
 }
 
-func (f *fakeOTPs) VerifyCode(_ context.Context, _ string, _ domain.OTPPurpose, hash string, maxAttempts int) (domain.OTPVerifyOutcome, int, error) {
-	f.called, f.hash, f.maxAttempts = true, hash, maxAttempts
+func (f *fakeOTPs) VerifyCode(_ context.Context, _ string, _ domain.OTPPurpose, hash string, maxAttempts int, verifiedTTL time.Duration) (domain.OTPVerifyOutcome, int, error) {
+	f.called, f.hash, f.maxAttempts, f.verifiedTTL = true, hash, maxAttempts, verifiedTTL
 
 	return f.outcome, f.left, nil
 }
 
-var cfg = config.OTPConfig{MaxVerifyAttempts: 5}
+var cfg = config.OTPConfig{MaxVerifyAttempts: 5, VerifiedTTL: 10 * time.Minute}
 
 func req() domain.OTPVerifyRequest {
 	return domain.OTPVerifyRequest{PhoneNumber: "+998901234567", Purpose: domain.OTPPurposeSignUp, Code: " 012345 "}
@@ -50,7 +52,7 @@ func TestExecute_Outcomes(t *testing.T) {
 			t.Fatalf("outcome %d: got %v, want %v %q", tc.outcome, err, tc.want, tc.note)
 		}
 
-		if otps.hash != domain.HashOTPCode("+998901234567", domain.OTPPurposeSignUp, "012345") || otps.maxAttempts != 5 {
+		if otps.hash != domain.HashOTPCode("+998901234567", domain.OTPPurposeSignUp, "012345") || otps.maxAttempts != 5 || otps.verifiedTTL != 10*time.Minute {
 			t.Fatalf("unexpected store call: %+v", otps)
 		}
 	}

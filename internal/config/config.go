@@ -26,6 +26,8 @@ type Application struct {
 
 	OTP *OTPConfig `env:", prefix=OTP_"`
 
+	JWT *JWTConfig `env:", prefix=JWT_"`
+
 	S3 *S3Config `env:", prefix=S3_"`
 
 	Media *MediaConfig `env:", prefix=MEDIA_"`
@@ -64,6 +66,17 @@ type OTPConfig struct {
 	MaxPerIPHour    int           `env:"MAX_PER_IP_HOUR, default=20"`
 	// MaxVerifyAttempts wrong codes delete the code; the user must request a new one.
 	MaxVerifyAttempts int `env:"MAX_VERIFY_ATTEMPTS, default=5"`
+	// VerifiedTTL is how long a verified sign_up code lets the phone number sign up.
+	VerifiedTTL time.Duration `env:"VERIFIED_TTL, default=10m"`
+}
+
+// JWTConfig configures the access and refresh tokens (HS256 JWTs).
+type JWTConfig struct {
+	// Secret signs and checks every token; at least 32 bytes. Changing it signs everyone out.
+	Secret     string        `env:"SECRET"`
+	Issuer     string        `env:"ISSUER, default=birga"`
+	AccessTTL  time.Duration `env:"ACCESS_TTL, default=15m"`
+	RefreshTTL time.Duration `env:"REFRESH_TTL, default=720h"`
 }
 
 // RedisConfig configures the Redis client that holds one-time codes and rate limits.

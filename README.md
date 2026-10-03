@@ -34,6 +34,8 @@ internal/
   domain/              plain business types, no dependencies
   errs/                application errors; the REST layer maps them to HTTP codes
   dbstore/             PostgreSQL repositories (pgx), transactions via InTx(ctx, fn)
+  redisstore/          Redis state: one-time codes, verified phones, rate limits
+  tokens/              JWT access and refresh tokens (HS256)
   drivers/             integrations with external services (one package per service)
   usecases/            one package per business action, depends only on small interfaces
   gateways/rest/       gin server, routes, handlers + swagger annotations, response envelope

@@ -40,12 +40,13 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP hashing |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `TokenClaims`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
-| `internal/dbstore/` | PostgreSQL repositories and the transaction helper |
-| `internal/redisstore/` | Redis state: one-time codes and the send-OTP rate limiter (`store.OTP()`) |
+| `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Activity()`, `Media()`) and the transaction helper |
+| `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
+| `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader` |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `token_refresher` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -68,7 +69,7 @@ resource that needs closing:
    be pinged within `REDIS_CONNECT_TIMEOUT`. `redisstore.New(rdb)`.
 4. Drivers: the SMS sender chosen by `SMS_PROVIDER` (`playmobile` or `log`). Startup fails on
    an unknown provider, on `playmobile` without credentials, and on `log` in production.
-5. Use cases.
+5. Use cases, with `tokens.Issuer`; startup fails if `JWT_SECRET` is shorter than 32 bytes.
 6. REST server.
 
 `App.Run` starts the metrics server on `METRICS_PORT` and the API on `HTTP_PORT`, then waits
@@ -96,7 +97,8 @@ writes the response envelope.
 
 `rest.New` takes each activity use case as its own argument; the user use cases come grouped
 in `rest.UserUseCases` (creator, lister, getter, updater, deleter) and the OTP ones in
-`rest.OTPUseCases` (sender, verifier). Group the use cases of
+`rest.OTPUseCases` (sender, verifier) and the auth ones in `rest.AuthUseCases` (sign-up,
+refresher). Group the use cases of
 new resources the same way rather than growing the argument list.
 
 ## Errors
@@ -114,7 +116,7 @@ The full mapping table is in [api.md](api.md#errors).
 
 ## Database access
 
-- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`, `store.OTP()`).
+- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`, `store.Auth()`, `store.Media()`).
 - `DBStore.InTx(ctx, fn)` runs `fn` in a read-committed transaction. Repository calls made
   with the `ctx` that `fn` receives join the transaction automatically
   (`sqlClientByCtx` picks the `pgx.Tx` from the context, or the pool otherwise).
@@ -136,11 +138,29 @@ layout in [data-model.md](data-model.md#redis-keys)). It uses
 
 - Logic that must not race runs as a Lua script (`redis.NewScript`), which Redis executes
   atomically: `acquireScript` checks the cooldown and both hourly counters and only then counts
-  the send; `verifyScript` compares the hash and deletes the code on a match, or counts the
-  attempt and deletes the code after the last one. Several API instances can share one Redis.
+  the send; `verifyScript` compares the hash and on a match deletes the code and sets the
+  `verified` mark, or counts the attempt and deletes the code after the last one. Several API instances can share one Redis.
 - Scripts return small integer tuples; the Go side maps them to `errs` values
   (`ErrRateLimited` with the wait in seconds) or `domain.OTPVerifyOutcome`.
 - Use cases declare the methods they need (`otpStore`), exactly as with `dbstore`.
+
+## Authentication
+
+Sign-up depends on a verified phone number, handed over through Redis rather than a token:
+
+1. `otp_verifier` runs `verifyScript`; a match sets `birga:otp:verified:<purpose>:<phone>` for
+   `OTP_VERIFIED_TTL`.
+2. `user_signup` checks the `sign_up` mark, hashes the password with bcrypt (default cost 10),
+   and in one `InTx` creates the `users` row, issues the token pair and inserts `user_auth`
+   with the SHA-256 hashes of both tokens. Only after the commit does it delete the mark, so a
+   failed sign-up can be retried.
+3. `token_refresher` parses the refresh token (`tokens.Issuer.Parse`: HS256 only, issuer,
+   expiry, `typ`), loads `user_auth` and compares hashes in constant time, then issues a new
+   access token and stores its hash. A soft-deleted user has no `user_auth` row, so their
+   refresh token stops working at once.
+
+No middleware checks access tokens yet; the first authenticated endpoint will add one that
+calls `tokens.Issuer.Parse(token, domain.TokenTypeAccess)`.
 
 ## Drivers
 

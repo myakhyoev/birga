@@ -28,6 +28,10 @@ In the devops folder on the server, set `BACKEND_TAG` in `.env` (a commit SHA fr
 API. Migrations must therefore be backward compatible with the API version still running
 during the rollout.
 
+The API refuses to start without `JWT_SECRET` (at least 32 bytes). Set a generated value
+(`openssl rand -hex 32`) in the server's `.env` before deploying a version with
+`/v1/auth/*`, and keep it stable: changing it invalidates every issued token.
+
 ## Compose stack (devops)
 
 `COMPOSE_FILE` in the devops `.env` picks which layers run:

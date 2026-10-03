@@ -19,6 +19,7 @@ import (
 //	birga:otp:cooldown:<purpose>:<phone>  "1", TTL = OTP_RESEND_COOLDOWN
 //	birga:otp:limit:phone:<phone>         counter, TTL = limit window from the first send
 //	birga:otp:limit:ip:<ip>               counter, TTL = limit window from the first send
+//	birga:otp:verified:<purpose>:<phone>  "1", TTL = OTP_VERIFIED_TTL, set when a code matches
 type otpRepo struct {
 	rdb redis.UniversalClient
 }
@@ -29,6 +30,10 @@ func codeKey(phone string, purpose domain.OTPPurpose) string {
 
 func cooldownKey(phone string, purpose domain.OTPPurpose) string {
 	return keyPrefix + "otp:cooldown:" + string(purpose) + ":" + phone
+}
+
+func verifiedKey(phone string, purpose domain.OTPPurpose) string {
+	return keyPrefix + "otp:verified:" + string(purpose) + ":" + phone
 }
 
 func phoneLimitKey(phone string) string { return keyPrefix + "otp:limit:phone:" + phone }
@@ -65,13 +70,15 @@ end
 return 0
 `)
 
-// verifyScript compares the hash; a match deletes the code, a mismatch counts an attempt and
-// deletes the code once ARGV[2] attempts are used. Result: {outcome, attempts left}.
+// verifyScript compares the hash; a match deletes the code and marks the phone verified for
+// ARGV[3] ms, a mismatch counts an attempt and deletes the code once ARGV[2] attempts are used.
+// Result: {outcome, attempts left}.
 var verifyScript = redis.NewScript(`
 local stored = redis.call('HGET', KEYS[1], 'hash')
 if not stored then return {2, 0} end
 if stored == ARGV[1] then
   redis.call('DEL', KEYS[1])
+  redis.call('SET', KEYS[2], '1', 'PX', ARGV[3])
   return {0, 0}
 end
 local left = tonumber(ARGV[2]) - redis.call('HINCRBY', KEYS[1], 'attempts', 1)
@@ -149,13 +156,16 @@ func (r *otpRepo) SaveCode(ctx context.Context, phone string, purpose domain.OTP
 }
 
 // VerifyCode compares hash with the stored code. See domain.OTPVerifyOutcome; attemptsLeft is
-// set for OTPMismatch.
+// set for OTPMismatch. A match marks the phone verified for the purpose for verifiedTTL
+// (see IsVerified).
 func (r *otpRepo) VerifyCode(
-	ctx context.Context, phone string, purpose domain.OTPPurpose, hash string, maxAttempts int,
+	ctx context.Context, phone string, purpose domain.OTPPurpose, hash string, maxAttempts int, verifiedTTL time.Duration,
 ) (domain.OTPVerifyOutcome, int, error) {
 	l := logger.FromCtx(ctx, "otpRepo.VerifyCode")
 
-	res, err := verifyScript.Run(ctx, r.rdb, []string{codeKey(phone, purpose)}, hash, maxAttempts).Int64Slice()
+	keys := []string{codeKey(phone, purpose), verifiedKey(phone, purpose)}
+
+	res, err := verifyScript.Run(ctx, r.rdb, keys, hash, maxAttempts, verifiedTTL.Milliseconds()).Int64Slice()
 	if err != nil {
 		l.Error("verifyScript.Run", zap.Error(err))
 
@@ -163,6 +173,34 @@ func (r *otpRepo) VerifyCode(
 	}
 
 	return domain.OTPVerifyOutcome(res[0]), int(res[1]), nil
+}
+
+// IsVerified reports whether a code for phone and purpose matched within OTP_VERIFIED_TTL and
+// the mark was not consumed yet.
+func (r *otpRepo) IsVerified(ctx context.Context, phone string, purpose domain.OTPPurpose) (bool, error) {
+	l := logger.FromCtx(ctx, "otpRepo.IsVerified")
+
+	n, err := r.rdb.Exists(ctx, verifiedKey(phone, purpose)).Result()
+	if err != nil {
+		l.Error("rdb.Exists", zap.Error(err))
+
+		return false, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return n == 1, nil
+}
+
+// ConsumeVerified removes the verified mark, so one verification is used once.
+func (r *otpRepo) ConsumeVerified(ctx context.Context, phone string, purpose domain.OTPPurpose) error {
+	l := logger.FromCtx(ctx, "otpRepo.ConsumeVerified")
+
+	if err := r.rdb.Del(ctx, verifiedKey(phone, purpose)).Err(); err != nil {
+		l.Error("rdb.Del", zap.Error(err))
+
+		return errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return nil
 }
 
 // waitSeconds rounds a PTTL in milliseconds up to whole seconds (at least 1).
