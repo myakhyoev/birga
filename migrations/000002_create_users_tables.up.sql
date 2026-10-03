@@ -20,3 +20,18 @@ CREATE TABLE IF NOT EXISTS user_auth (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Soft-deleting a user (deleted_at NULL -> NOT NULL) removes their auth row, the same as a
+-- hard delete does through ON DELETE CASCADE.
+CREATE OR REPLACE FUNCTION users_soft_delete_auth() RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM user_auth WHERE id = NEW.id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER users_soft_delete_auth_trg
+    AFTER UPDATE OF deleted_at ON users
+    FOR EACH ROW
+    WHEN (OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL)
+    EXECUTE FUNCTION users_soft_delete_auth();

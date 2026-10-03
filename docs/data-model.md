@@ -83,7 +83,14 @@ Authentication state for a user, one row per user. Created by
 Constraints:
 
 - `id` references `users(id)` `ON DELETE CASCADE`: hard-deleting a user removes their
-  auth row. A soft delete (setting `users.deleted_at`) does not.
+  auth row.
+
+Triggers:
+
+- `users_soft_delete_auth_trg` on `users` (function `users_soft_delete_auth()`): when a
+  user's `deleted_at` changes from `NULL` to a value, their `user_auth` row is deleted, so
+  a soft delete also drops the user's tokens. Restoring the user (`deleted_at` back to
+  `NULL`) does not bring the row back; they sign in again.
 
 ## Conventions
 
