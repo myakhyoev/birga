@@ -186,6 +186,11 @@ func TestChildRepo_DeletedHidden(t *testing.T) {
 	inRollbackTx(t, s, func(ctx context.Context) {
 		mom, dad, shared, momsOnly := family(ctx, t, s)
 
+		// Linked to dad before mom goes, so deleting mom does not delete this child.
+		if err := s.Child().AddParent(ctx, momsOnly.ID, dad.ID); err != nil {
+			t.Fatalf("AddParent momsOnly: %v", err)
+		}
+
 		if err := s.User().Delete(ctx, mom.ID); err != nil {
 			t.Fatalf("Delete mom: %v", err)
 		}
@@ -194,16 +199,50 @@ func TestChildRepo_DeletedHidden(t *testing.T) {
 			t.Fatalf("Parents after user delete: %+v, %v", parents, err)
 		}
 
-		if err := s.Child().AddParent(ctx, momsOnly.ID, dad.ID); err != nil {
-			t.Fatalf("AddParent momsOnly: %v", err)
-		}
-
 		if err := s.Child().Delete(ctx, momsOnly.ID); err != nil {
 			t.Fatalf("Delete momsOnly: %v", err)
 		}
 
 		if items, total, err := s.Child().List(ctx, domain.ChildFilter{ParentID: dad.ID, Limit: 10}); err != nil || total != 1 || items[0].ID != shared.ID {
 			t.Fatalf("List dad after delete: %d %+v %v", total, items, err)
+		}
+	})
+}
+
+// Deleting a user deletes the children no other parent has (migration 000008).
+func TestUserDelete_CascadesToChildren(t *testing.T) {
+	s := newTestStore(t)
+
+	inRollbackTx(t, s, func(ctx context.Context) {
+		mom, dad, shared, momsOnly := family(ctx, t, s)
+		sqlClient := s.sqlClientByCtx(ctx)
+
+		// Soft delete: the child only mom had goes, the shared child stays with dad.
+		if err := s.User().Delete(ctx, mom.ID); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+
+		if _, err := s.Child().Get(ctx, momsOnly.ID); !errors.Is(err, errs.ErrChildNotFound) {
+			t.Fatalf("mom's only child: expected deleted, got %v", err)
+		}
+
+		if parents, err := s.Child().Parents(ctx, shared.ID); err != nil || len(parents) != 1 || parents[0].ID != dad.ID {
+			t.Fatalf("shared child parents: %+v %v", parents, err)
+		}
+
+		var momLinks int
+		if err := sqlClient.QueryRow(ctx, `SELECT COUNT(*) FROM user_children WHERE user_id = $1`, mom.ID).Scan(&momLinks); err != nil || momLinks != 0 {
+			t.Fatalf("mom's links: %d %v", momLinks, err)
+		}
+
+		// Hard delete: dad was the last parent, so the shared child row goes too.
+		if _, err := sqlClient.Exec(ctx, `DELETE FROM users WHERE id = $1`, dad.ID); err != nil {
+			t.Fatalf("hard delete: %v", err)
+		}
+
+		var left int
+		if err := sqlClient.QueryRow(ctx, `SELECT COUNT(*) FROM children WHERE id = $1`, shared.ID).Scan(&left); err != nil || left != 0 {
+			t.Fatalf("shared child after hard delete: %d %v", left, err)
 		}
 	})
 }

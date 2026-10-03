@@ -27,11 +27,11 @@ type fakeAuth struct {
 func (f fakeAuth) Get(context.Context, string) (domain.UserAuth, error) { return f.a, f.err }
 
 func TestExecute(t *testing.T) {
-	current := fakeAuth{a: domain.UserAuth{UserID: "u1", AccessTokenHash: domain.HashToken("good")}}
+	current := fakeAuth{a: domain.UserAuth{UserID: "u1", Role: domain.UserRolePaidUser, AccessTokenHash: domain.HashToken("good")}}
 
-	id, err := New(nil, fakeTokens{}, current).Execute(context.Background(), " good ")
-	if err != nil || id != "u1" {
-		t.Fatalf("good token: %q %v", id, err)
+	p, err := New(nil, fakeTokens{}, current).Execute(context.Background(), " good ")
+	if err != nil || p.UserID != "u1" || p.Role != domain.UserRolePaidUser {
+		t.Fatalf("good token: %+v %v", p, err)
 	}
 
 	cases := map[string]struct {

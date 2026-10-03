@@ -52,17 +52,23 @@ func (i *Issuer) Issue(userID string, role domain.UserRole, typ domain.TokenType
 
 	now := i.now()
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
+	c := claims{
 		Type: typ,
 		Role: role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    i.cfg.Issuer,
-			Subject:   userID,
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
-			ID:        uuid.NewString(),
+			Issuer:   i.cfg.Issuer,
+			Subject:  userID,
+			IssuedAt: jwt.NewNumericDate(now),
+			ID:       uuid.NewString(),
 		},
-	}).SignedString(i.secret)
+	}
+
+	// A zero refresh TTL means the refresh token never expires (no exp claim). Access tokens always expire.
+	if typ == domain.TokenTypeAccess || ttl > 0 {
+		c.ExpiresAt = jwt.NewNumericDate(now.Add(ttl))
+	}
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString(i.secret)
 	if err != nil {
 		return "", errs.Errf(errs.ErrInternal, "sign jwt: %s", err.Error())
 	}
@@ -70,17 +76,22 @@ func (i *Issuer) Issue(userID string, role domain.UserRole, typ domain.TokenType
 	return token, nil
 }
 
-// Parse checks the signature, issuer, expiry and type of token. Any failure is
+// Parse checks the signature, issuer, expiry and type of token. Access tokens must carry exp;
+// refresh tokens may omit it (JWT_REFRESH_TTL=0), but one that has exp is checked. Any failure is
 // errs.ErrUnauthorized.
 func (i *Issuer) Parse(token string, want domain.TokenType) (domain.TokenClaims, error) {
 	var c claims
 
-	_, err := jwt.ParseWithClaims(token, &c, func(*jwt.Token) (any, error) { return i.secret, nil },
+	opts := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 		jwt.WithIssuer(i.cfg.Issuer),
-		jwt.WithExpirationRequired(),
 		jwt.WithTimeFunc(i.now),
-	)
+	}
+	if want == domain.TokenTypeAccess {
+		opts = append(opts, jwt.WithExpirationRequired())
+	}
+
+	_, err := jwt.ParseWithClaims(token, &c, func(*jwt.Token) (any, error) { return i.secret, nil }, opts...)
 
 	switch {
 	case errors.Is(err, jwt.ErrTokenExpired):

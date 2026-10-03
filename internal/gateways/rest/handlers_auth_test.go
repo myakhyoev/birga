@@ -28,18 +28,21 @@ func (f *fakeAuth) refresh(token string) (domain.AccessToken, error) {
 	return domain.AccessToken{Token: "a2", ExpiresIn: 15 * time.Minute}, f.err
 }
 
-// check accepts the access token "good" as user testUserID.
-func (f *fakeAuth) check(token string) (string, error) {
-	if token != "good" {
-		return "", errs.Errf(errs.ErrUnauthorized, "invalid token")
+// check accepts the access token "good" as user testUserID with role user, and "admin" as an admin.
+func (f *fakeAuth) check(token string) (domain.Principal, error) {
+	switch token {
+	case "good":
+		return domain.Principal{UserID: testUserID, Role: domain.UserRoleUser}, nil
+	case "admin":
+		return domain.Principal{UserID: testUserID, Role: domain.UserRoleAdmin}, nil
+	default:
+		return domain.Principal{}, errs.Errf(errs.ErrUnauthorized, "invalid token")
 	}
-
-	return testUserID, nil
 }
 
-type checkerFunc func(string) (string, error)
+type checkerFunc func(string) (domain.Principal, error)
 
-func (fn checkerFunc) Execute(_ context.Context, token string) (string, error) {
+func (fn checkerFunc) Execute(_ context.Context, token string) (domain.Principal, error) {
 	return fn(token)
 }
 

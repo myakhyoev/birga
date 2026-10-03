@@ -73,8 +73,13 @@ type streakGetter interface {
 	Execute(ctx context.Context, userID, childID string) (domain.Streak, error)
 }
 
-// ChildActivityUseCases groups the use cases behind the signed-in /v1/children/{id}/... endpoints.
+type childCreator interface {
+	Execute(ctx context.Context, userID string, c domain.Child) (domain.Child, error)
+}
+
+// ChildActivityUseCases groups the use cases behind the signed-in /v1/children endpoints.
 type ChildActivityUseCases struct {
+	Creator     childCreator
 	Recommender activityRecommender
 	Recorder    completionRecorder
 	Lister      completionLister
@@ -132,7 +137,7 @@ type tokenRefresher interface {
 }
 
 type tokenChecker interface {
-	Execute(ctx context.Context, accessToken string) (string, error)
+	Execute(ctx context.Context, accessToken string) (domain.Principal, error)
 }
 
 // AuthUseCases groups the use cases behind the /v1/auth endpoints.
@@ -162,6 +167,7 @@ type Server struct {
 	activityUpdater activityUpdater
 	activityDeleter activityDeleter
 
+	childCreator        childCreator
 	activityRecommender activityRecommender
 	completionRecorder  completionRecorder
 	completionLister    completionLister
@@ -221,6 +227,7 @@ func New(cfg config.Application,
 		activityUpdater: activityEdit.Updater,
 		activityDeleter: activityEdit.Deleter,
 
+		childCreator:        childActivities.Creator,
 		activityRecommender: childActivities.Recommender,
 		completionRecorder:  childActivities.Recorder,
 		completionLister:    childActivities.Lister,

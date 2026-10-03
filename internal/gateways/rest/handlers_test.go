@@ -83,6 +83,7 @@ func newTestServer(adminKey string) (*Server, *deps) {
 	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter,
 		ActivityEditUseCases{Updater: d.edit, Deleter: activityDeleterFunc(d.edit.delete)},
 		ChildActivityUseCases{
+			Creator:     childCreatorFunc(d.kids.create),
 			Recommender: d.kids,
 			Recorder:    recorderFunc(d.kids.record),
 			Lister:      completionListerFunc(d.kids.list),

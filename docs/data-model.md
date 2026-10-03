@@ -9,7 +9,7 @@ that golang-migrate creates records the current version.
 ### `activities`
 
 The curated catalogue of short offline activities. Created by
-`000001_create_activities_table`; `deleted_at` added by `000006_create_activity_completions`.
+`000001_create_activities_table`; `deleted_at` added by `000007_create_activity_completions`.
 Rows are soft-deleted by setting `deleted_at`.
 
 | Column | Type | Null | Default | Notes |
@@ -37,7 +37,7 @@ Indexes:
 
 - primary key on `id`
 - `activities_published_goal_idx` on `(goal) WHERE is_published AND deleted_at IS NULL`, for
-  the public list filtered by goal (recreated with the `deleted_at` condition by `000006`)
+  the public list filtered by goal (recreated with the `deleted_at` condition by `000007`)
 
 Goals are plain text, not an enum type or lookup table. The allowed values (`language`,
 `motor`, `cognitive`, `social`, `emotional`) are checked in Go
@@ -119,6 +119,8 @@ Triggers:
   user's `deleted_at` changes from `NULL` to a value, their `user_auth` row is deleted, so
   a soft delete also drops the user's tokens. Restoring the user (`deleted_at` back to
   `NULL`) does not bring the row back; they sign in again.
+- `users_soft_delete_children_trg` and `users_delete_children_trg` on `users`: delete the
+  user's children with them; see [`user_children`](#user_children).
 - `users_sync_auth_username_trg` on `users` (function `users_sync_auth_username()`): when
   `users.username` changes (for example through `PATCH /v1/admin/users/:id`), the same value
   is written to `user_auth.username`.
@@ -144,7 +146,7 @@ deleted again. Replaced photos are not cleaned up yet (no cleanup job).
 
 ### `children`
 
-Child profiles. Created by `000005_create_children_tables`. Rows are soft-deleted by setting
+Child profiles. Created by `000006_create_children_tables`. Rows are soft-deleted by setting
 `deleted_at`. A child belongs to its parents through `user_children`, not through a column.
 
 | Column | Type | Null | Default | Notes |
@@ -171,7 +173,7 @@ Constraints:
 ### `user_children`
 
 Many-to-many link between parents and children: a user can have several children and a
-child several parents. Created by `000005_create_children_tables`.
+child several parents. Created by `000006_create_children_tables`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -184,22 +186,36 @@ Indexes:
 - primary key on `(user_id, child_id)`, which also serves "children of a user"
 - `user_children_child_id_idx` on `(child_id)`, for "parents of a child"
 
-Links are not soft-deleted. Soft-deleting a user or a child leaves its links in place;
-every read joins through active rows only, so the deleted side simply disappears (a
-deleted parent is not listed by `childRepo.Parents`, a deleted child is not listed for its
-parents). Hard deletes remove the links through the cascades.
+Links are not soft-deleted. Soft-deleting a child leaves its links in place; every read joins
+through active rows only, so a deleted child is not listed for its parents.
+
+Deleting a user deletes their children too, unless another parent still has the child
+(migration `000008_cascade_user_children`):
+
+- Soft delete (`users.deleted_at` set, `DELETE /v1/admin/users/{id}`): trigger
+  `users_soft_delete_children_trg` (function `users_soft_delete_children()`) deletes the user's
+  `user_children` rows, then soft-deletes every child they were linked to that has no link
+  left. Those children's `activity_completions` stay, like the rest of a soft-deleted child.
+  A shared child stays with its other parents.
+- Hard delete (`DELETE FROM users`): trigger `users_delete_children_trg` (function
+  `users_delete_children()`, `BEFORE DELETE`) deletes the children only this user is linked
+  to; their completions go through `activity_completions.child_id ON DELETE CASCADE`. The
+  user's remaining links go through `user_children.user_id ON DELETE CASCADE`.
+- The migration applies the soft-delete rule once to users deleted before it ran.
+- Restoring a user (`deleted_at` back to `NULL`) does not bring links or children back. The
+  down migration drops the triggers and leaves deleted rows as they are.
 
 Repository (`store.Child()`): `Create`, `Get`, `List` (optionally by `ParentID`, paged),
 `Update` (partial, `PhotoID` `""` clears it), `Delete` (soft), `AddParent` (idempotent;
 `ErrChildNotFound` or `ErrUserNotFound` when either side is missing or deleted),
 `RemoveParent` (`ErrChildNotFound` when the link does not exist) and `Parents`. Creating a
-child and linking it to its first parent are two calls; a use case runs them in
-`DBStore.InTx`.
+child and linking it to its first parent are two calls; the `child_creator` use case
+(`POST /v1/children`) runs them in `DBStore.InTx`.
 
 ### `activity_completions`
 
 One row per activity a child did on a day, with the caregiver's optional reflection. Created
-by `000006_create_activity_completions`. Rows are never updated except for the note, and
+by `000007_create_activity_completions`. Rows are never updated except for the note, and
 never soft-deleted.
 
 | Column | Type | Null | Default | Notes |

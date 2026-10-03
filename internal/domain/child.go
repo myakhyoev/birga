@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"time"
+	"unicode/utf8"
+)
 
 // Child genders, stored as text and checked by children_gender_chk.
 const (
@@ -11,6 +14,9 @@ const (
 // MaxChildProfileAge is the oldest age children_age_chk accepts, in years. It is wider than the
 // 2 to 6 activity range so a profile stays valid as the child grows.
 const MaxChildProfileAge = 18
+
+// MaxChildNameLength caps a child's name, counted in characters.
+const MaxChildNameLength = 100
 
 // Child is a child profile. It belongs to one or more parents (users) through user_children.
 type Child struct {
@@ -51,4 +57,9 @@ func IsKnownGender(gender string) bool {
 // IsValidChildAge reports whether age fits children_age_chk.
 func IsValidChildAge(age int) bool {
 	return age >= 0 && age <= MaxChildProfileAge
+}
+
+// IsValidChildName reports whether name is non-empty and at most MaxChildNameLength characters.
+func IsValidChildName(name string) bool {
+	return name != "" && utf8.RuneCountInString(name) <= MaxChildNameLength
 }

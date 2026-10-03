@@ -76,10 +76,12 @@ type OTPConfig struct {
 // JWTConfig configures the access and refresh tokens (HS256 JWTs).
 type JWTConfig struct {
 	// Secret signs and checks every token; at least 32 bytes. Changing it signs everyone out.
-	Secret     string        `env:"SECRET"`
-	Issuer     string        `env:"ISSUER, default=birga"`
-	AccessTTL  time.Duration `env:"ACCESS_TTL, default=15m"`
-	RefreshTTL time.Duration `env:"REFRESH_TTL, default=720h"`
+	Secret    string        `env:"SECRET"`
+	Issuer    string        `env:"ISSUER, default=birga"`
+	AccessTTL time.Duration `env:"ACCESS_TTL, default=24h"`
+	// RefreshTTL of 0 (the default) issues refresh tokens without an expiry; they stay valid until
+	// replaced or the user is deleted.
+	RefreshTTL time.Duration `env:"REFRESH_TTL, default=0"`
 }
 
 // RedisConfig configures the Redis client that holds one-time codes and rate limits.

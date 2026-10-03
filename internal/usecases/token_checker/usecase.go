@@ -31,32 +31,33 @@ func New(l logger.Logger, tokens tokenParser, auth authRepo) *UseCase {
 	return &UseCase{l: l, tokens: tokens, auth: auth}
 }
 
-// Execute returns the user id of a validly signed, unexpired access token that is still the one
-// stored in user_auth: refreshing replaces it, and deleting the user removes it. Any failure is
+// Execute returns the user of a validly signed, unexpired access token that is still the one
+// stored in user_auth: refreshing replaces it, and deleting the user removes it. The role is the one
+// stored now, not the token's claim, so a role change applies at once. Any failure is
 // errs.ErrUnauthorized.
-func (uc *UseCase) Execute(ctx context.Context, accessToken string) (string, error) {
+func (uc *UseCase) Execute(ctx context.Context, accessToken string) (domain.Principal, error) {
 	accessToken = strings.TrimSpace(accessToken)
 	if accessToken == "" {
-		return "", errs.Errf(errs.ErrUnauthorized, "missing access token, send Authorization: Bearer <token>")
+		return domain.Principal{}, errs.Errf(errs.ErrUnauthorized, "missing access token, send Authorization: Bearer <token>")
 	}
 
 	claims, err := uc.tokens.Parse(accessToken, domain.TokenTypeAccess)
 	if err != nil {
-		return "", err
+		return domain.Principal{}, err
 	}
 
 	a, err := uc.auth.Get(ctx, claims.UserID)
 	if errors.Is(err, errs.ErrUserNotFound) {
-		return "", errs.Errf(errs.ErrUnauthorized, "access token is no longer valid")
+		return domain.Principal{}, errs.Errf(errs.ErrUnauthorized, "access token is no longer valid")
 	}
 
 	if err != nil {
-		return "", err
+		return domain.Principal{}, err
 	}
 
 	if subtle.ConstantTimeCompare([]byte(a.AccessTokenHash), []byte(domain.HashToken(accessToken))) != 1 {
-		return "", errs.Errf(errs.ErrUnauthorized, "access token is no longer valid, refresh it")
+		return domain.Principal{}, errs.Errf(errs.ErrUnauthorized, "access token is no longer valid, refresh it")
 	}
 
-	return claims.UserID, nil
+	return domain.Principal{UserID: claims.UserID, Role: a.Role}, nil
 }

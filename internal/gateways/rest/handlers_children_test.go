@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/errs"
 	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
@@ -20,6 +22,7 @@ const (
 var bearer = map[string]string{authorizationHeader: "Bearer good"}
 
 type fakeChildActivities struct {
+	gotCreate    domain.Child
 	gotRecommend activityrecommender.Request
 	gotRecord    completionrecorder.Request
 	gotList      domain.CompletionFilter
@@ -51,6 +54,19 @@ func (f *fakeChildActivities) streak(userID, childID string) (domain.Streak, err
 	last := time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
 
 	return domain.Streak{Current: 2, Longest: 5, CompletedToday: true, ThisWeek: 2, Total: 9, LastCompletedOn: &last}, f.err
+}
+
+func (f *fakeChildActivities) create(userID string, c domain.Child) (domain.Child, error) {
+	f.gotUserID, f.gotCreate = userID, c
+	c.ID = testChildID
+
+	return c, f.err
+}
+
+type childCreatorFunc func(string, domain.Child) (domain.Child, error)
+
+func (fn childCreatorFunc) Execute(_ context.Context, userID string, c domain.Child) (domain.Child, error) {
+	return fn(userID, c)
 }
 
 type recorderFunc func(completionrecorder.Request) (domain.Completion, error)
@@ -167,5 +183,68 @@ func TestListCompletionsAndStreak(t *testing.T) {
 
 	if code, _ := do(t, s, http.MethodGet, base+"/streak", "", bearer); code != http.StatusNotFound {
 		t.Fatalf("not my child: %d", code)
+	}
+}
+
+func TestCreateChild(t *testing.T) {
+	s, d := newTestServer("")
+
+	code, r := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age":4,"gender":"male"}`, bearer)
+	if code != http.StatusOK {
+		t.Fatalf("got %d %+v", code, r)
+	}
+
+	want := domain.Child{Name: "Amir", Age: 4, Gender: domain.GenderMale}
+	if d.kids.gotUserID != testUserID || d.kids.gotCreate != want {
+		t.Fatalf("user %q child %+v", d.kids.gotUserID, d.kids.gotCreate)
+	}
+
+	if data, _ := r.Data.(map[string]any); data["id"] != testChildID {
+		t.Fatalf("data = %+v", r.Data)
+	}
+
+	if code, r := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","gender":"male"}`, bearer); code != http.StatusUnprocessableEntity {
+		t.Fatalf("missing age: %d %+v", code, r)
+	}
+
+	if code, _ := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age":4,"gender":"male"}`, nil); code != http.StatusUnauthorized {
+		t.Fatalf("no token: %d", code)
+	}
+
+	d.kids.err = errs.Errf(errs.ErrValidation, "gender must be male or female")
+
+	if code, _ := do(t, s, http.MethodPost, "/v1/children", `{"name":"Amir","age":4,"gender":"x"}`, bearer); code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid: %d", code)
+	}
+}
+
+func TestUserAuth_Roles(t *testing.T) {
+	s, _ := newTestServer("")
+	s.router.GET("/test/admin-only", s.userAuth(domain.UserRoleAdmin), func(c *gin.Context) { Return(c, currentUserID(c), nil) })
+
+	if code, r := do(t, s, http.MethodGet, "/test/admin-only", "", bearer); code != http.StatusForbidden || r.ErrorCode != _errCodeForbidden {
+		t.Fatalf("user on admin route: %d %+v", code, r)
+	}
+
+	if code, r := do(t, s, http.MethodGet, "/test/admin-only", "", map[string]string{authorizationHeader: "Bearer admin"}); code != http.StatusOK || r.Data != testUserID {
+		t.Fatalf("admin: %d %+v", code, r)
+	}
+}
+
+func TestAdminAuth_BearerToken(t *testing.T) {
+	s, _ := newTestServer(testAdminKey)
+
+	if code, _ := do(t, s, http.MethodGet, "/v1/admin/users", "", map[string]string{authorizationHeader: "Bearer admin"}); code != http.StatusOK {
+		t.Fatalf("admin token: %d", code)
+	}
+
+	// A bearer token decides on its own; a valid key does not rescue a non-admin token.
+	h := map[string]string{authorizationHeader: "Bearer good", adminKeyHeader: testAdminKey}
+	if code, _ := do(t, s, http.MethodGet, "/v1/admin/users", "", h); code != http.StatusForbidden {
+		t.Fatalf("user token: %d", code)
+	}
+
+	if code, _ := do(t, s, http.MethodGet, "/v1/admin/users", "", map[string]string{adminKeyHeader: testAdminKey}); code != http.StatusOK {
+		t.Fatalf("admin key: %d", code)
 	}
 }

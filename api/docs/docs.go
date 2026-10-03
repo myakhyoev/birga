@@ -1013,7 +1013,7 @@ const docTemplate = `{
         },
         "/v1/auth/signup": {
             "post": {
-                "description": "- the phone number must be verified first: POST /v1/otp/send and /v1/otp/verify with\npurpose sign_up; the verification lasts OTP_VERIFIED_TTL (default 10 minutes) and is\nused up by a successful sign-up. Not verified: 403\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),\nanything else is 422. Stored in user_auth.role and written into the tokens as the role claim\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,\ndefault 30 days) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "description": "- the phone number must be verified first: POST /v1/otp/send and /v1/otp/verify with\npurpose sign_up; the verification lasts OTP_VERIFIED_TTL (default 10 minutes) and is\nused up by a successful sign-up. Not verified: 403\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),\nanything else is 422. Stored in user_auth.role and written into the tokens as the role claim\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -1070,6 +1070,87 @@ const docTemplate = `{
                         "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/children": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- creates the child profile and links it to the caller in the same transaction;\nthe caller is the child's first parent\n- any signed-in role (user, paid_user, admin) may add children\n- name is required, at most 100 characters; age is required, 0..18; gender is male or female\n- photo_id is an optional id from POST /v1/media (422 if unknown)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "adds a child to the signed-in user",
+                "parameters": [
+                    {
+                        "description": "child",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CreateChildRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.childView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
                         }
                     },
                     "422": {
@@ -1750,6 +1831,31 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.CreateChildRequest": {
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "gender": {
+                    "type": "string",
+                    "enum": [
+                        "male",
+                        "female"
+                    ],
+                    "example": "male"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Amir"
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                }
+            }
+        },
         "rest.CreateUserRequest": {
             "type": "object",
             "properties": {
@@ -2134,7 +2240,7 @@ const docTemplate = `{
                 "expires_in": {
                     "description": "seconds until the access token expires",
                     "type": "integer",
-                    "example": 900
+                    "example": 86400
                 }
             }
         },
@@ -2204,6 +2310,37 @@ const docTemplate = `{
                 "title_uz": {
                     "type": "string",
                     "example": "Rangli toshlar"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "rest.childView": {
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string",
+                    "example": "male"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Amir"
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
                 "updated_at": {
                     "type": "string"
@@ -2403,7 +2540,7 @@ const docTemplate = `{
                 "expires_in": {
                     "description": "seconds until the access token expires",
                     "type": "integer",
-                    "example": 900
+                    "example": 86400
                 },
                 "refresh_token": {
                     "type": "string",

@@ -28,6 +28,7 @@ var (
 	ErrPhoneNotVerified      = Errf(ErrForbidden, "phone number is not verified, verify a sign_up code with /v1/otp/verify first")
 	ErrRoleNotSelfAssignable = Errf(ErrForbidden, "user_role admin cannot be chosen at sign-up")
 	ErrInvalidRefreshToken   = Errf(ErrUnauthorized, "refresh token is invalid or expired, sign in again")
+	ErrRoleNotAllowed        = Errf(ErrForbidden, "your role cannot use this endpoint")
 
 	ErrMediaUnsupportedType = Errf(ErrValidation, "unsupported file type, upload a JPEG, PNG or WebP image")
 	ErrMediaEmpty           = Errf(ErrValidation, "file is empty")

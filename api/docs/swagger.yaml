@@ -82,6 +82,24 @@ definitions:
         example: Rangli toshlar
         type: string
     type: object
+  rest.CreateChildRequest:
+    properties:
+      age:
+        example: 4
+        type: integer
+      gender:
+        enum:
+        - male
+        - female
+        example: male
+        type: string
+      name:
+        example: Amir
+        type: string
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+    type: object
   rest.CreateUserRequest:
     properties:
       name:
@@ -336,7 +354,7 @@ definitions:
         type: string
       expires_in:
         description: seconds until the access token expires
-        example: 900
+        example: 86400
         type: integer
     type: object
   rest.activityListView:
@@ -386,6 +404,28 @@ definitions:
         type: string
       title_uz:
         example: Rangli toshlar
+        type: string
+      updated_at:
+        type: string
+    type: object
+  rest.childView:
+    properties:
+      age:
+        example: 4
+        type: integer
+      created_at:
+        type: string
+      gender:
+        example: male
+        type: string
+      id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      name:
+        example: Amir
+        type: string
+      photo_id:
+        example: 5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
         type: string
       updated_at:
         type: string
@@ -538,7 +578,7 @@ definitions:
         type: string
       expires_in:
         description: seconds until the access token expires
-        example: 900
+        example: 86400
         type: integer
       refresh_token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -1235,8 +1275,8 @@ paths:
         - user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),
         anything else is 422. Stored in user_auth.role and written into the tokens as the role claim
         - username or phone number already used: 409
-        - access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,
-        default 30 days) are HS256 JWTs; send the access token as Authorization: Bearer <token>
+        - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
+        default 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer <token>
       parameters:
       - description: new user
         in: body
@@ -1279,6 +1319,60 @@ paths:
       summary: creates a user and returns their tokens
       tags:
       - auth
+  /v1/children:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - creates the child profile and links it to the caller in the same transaction;
+        the caller is the child's first parent
+        - any signed-in role (user, paid_user, admin) may add children
+        - name is required, at most 100 characters; age is required, 0..18; gender is male or female
+        - photo_id is an optional id from POST /v1/media (422 if unknown)
+      parameters:
+      - description: child
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.CreateChildRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.childView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: adds a child to the signed-in user
+      tags:
+      - children
   /v1/children/{id}/completions:
     get:
       parameters:

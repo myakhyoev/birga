@@ -24,6 +24,7 @@ import (
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
 	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
 	activityupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_updater"
+	childcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/child_creator"
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
@@ -214,6 +215,7 @@ type useCases struct {
 	activityUpdater *activityupdater.UseCase
 	activityDeleter *activitydeleter.UseCase
 
+	childCreator        *childcreator.UseCase
 	activityRecommender *activityrecommender.UseCase
 	completionRecorder  *completionrecorder.UseCase
 	completionLister    *completionlister.UseCase
@@ -254,6 +256,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		activityUpdater: activityupdater.New(l.Named("usecase.activity_updater"), store.Activity()),
 		activityDeleter: activitydeleter.New(l.Named("usecase.activity_deleter"), store.Activity()),
 
+		childCreator:        childcreator.New(l.Named("usecase.child_creator"), store, store.Child()),
 		activityRecommender: activityrecommender.New(l.Named("usecase.activity_recommender"), store.Child(), store.Activity()),
 		completionRecorder: completionrecorder.New(l.Named("usecase.completion_recorder"),
 			store.Child(), store.Activity(), store.Completion()),
@@ -299,6 +302,7 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Deleter: ucs.activityDeleter,
 		},
 		rest.ChildActivityUseCases{
+			Creator:     ucs.childCreator,
 			Recommender: ucs.activityRecommender,
 			Recorder:    ucs.completionRecorder,
 			Lister:      ucs.completionLister,

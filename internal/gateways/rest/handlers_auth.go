@@ -20,7 +20,7 @@ type SignUpRequest struct {
 type tokenPairView struct {
 	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
 	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
-	ExpiresIn    int    `json:"expires_in" example:"900"` // seconds until the access token expires
+	ExpiresIn    int    `json:"expires_in" example:"86400"` // seconds until the access token expires
 }
 
 // SignUp godoc swagger
@@ -33,8 +33,8 @@ type tokenPairView struct {
 // @Description - user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),
 // @Description   anything else is 422. Stored in user_auth.role and written into the tokens as the role claim
 // @Description - username or phone number already used: 409
-// @Description - access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,
-// @Description   default 30 days) are HS256 JWTs; send the access token as Authorization: Bearer <token>
+// @Description - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
+// @Description   default 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer <token>
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -83,7 +83,7 @@ type RefreshTokenRequest struct {
 
 type accessTokenView struct {
 	AccessToken string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
-	ExpiresIn   int    `json:"expires_in" example:"900"` // seconds until the access token expires
+	ExpiresIn   int    `json:"expires_in" example:"86400"` // seconds until the access token expires
 }
 
 // RefreshToken godoc swagger

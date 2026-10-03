@@ -26,7 +26,7 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured); sign-up without a verified phone number or with `user_role: admin` |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; sign-up without a verified phone number or with `user_role: admin` |
 | -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, OTP expired or not requested |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
@@ -41,29 +41,40 @@ request id.
 | Header | Direction | Meaning |
 |---|---|---|
 | `X-Request-Id` | request (optional) and response | correlates a call with server log lines; generated if absent |
-| `X-Admin-Key` | request | admin key for `/v1/admin/*` |
-| `Authorization: Bearer <access_token>` | request | signed-in user for `/v1/children/*` |
+| `X-Admin-Key` | request | admin key for `/v1/admin/*` (when no `Authorization` header is sent) |
+| `Authorization: Bearer <access_token>` | request | signed-in user for `/v1/children` and `/v1/children/*`; an admin user for `/v1/admin/*` |
 | `Content-Type: application/json` | request | for bodies |
 
 CORS allows any origin.
 
 ## Admin authentication
 
-`/v1/admin/*` is protected by a single shared key, a stop-gap until real admin accounts exist.
+`/v1/admin/*` accepts either an admin user's access token or the shared admin key.
 
-- Send `X-Admin-Key: <ADMIN_API_KEY>`. The comparison is constant-time.
-- Wrong or missing key: 401, code -20.
-- `ADMIN_API_KEY` not set on the server: every admin call returns 403, code -21.
+- With an `Authorization` header, the request is checked as [user authentication](#user-authentication)
+  with role `admin` only: an invalid token is 401 (-20), a valid token of a `user` or `paid_user`
+  is 403 (-21). `X-Admin-Key` is ignored then, so a valid key does not rescue a non-admin token.
+- Without one, send `X-Admin-Key: <ADMIN_API_KEY>`, a stop-gap for scripts and seeding. The
+  comparison is constant-time. Wrong or missing key: 401, code -20. `ADMIN_API_KEY` not set on
+  the server: 403, code -21, so then only admin users get in.
+- Nobody can become an admin through the API (sign-up refuses `user_role: admin`); set
+  `user_auth.role = 'admin'` in the database. The new role applies at once, because the role
+  is read from `user_auth` on every request, not from the token.
 
 ## User authentication
 
-Endpoints for a signed-in parent (today `/v1/children/{id}/...`) need the access token from
-`/v1/auth/signup` or `/v1/auth/refresh`:
+Endpoints for a signed-in parent (`/v1/children` and `/v1/children/{id}/...`) need the access
+token from `/v1/auth/signup` or `/v1/auth/refresh`:
 
 - Send `Authorization: Bearer <access_token>`.
-- The token must be validly signed, of type `access`, not expired, and still the latest access
-  token issued to the user (each refresh replaces the stored one, and deleting the user removes
-  it). Otherwise: 401, code -20. Refresh the token and retry.
+- The token must be validly signed, of type `access`, not expired (it lives `JWT_ACCESS_TTL`,
+  24 hours by default), and still the latest access token issued to the user (each refresh
+  replaces the stored one, and deleting the user removes it). Otherwise: 401, code -20.
+  Refresh the token and retry.
+- A route can be limited to some roles (`user`, `paid_user`, `admin`). The role checked is the
+  user's current `user_auth.role`, not the token's `role` claim. A role outside the list: 403,
+  code -21, `your role cannot use this endpoint`. Today `POST /v1/children` lists all three
+  roles and `/v1/admin/*` allows only `admin`.
 - A child id the user is not linked to (through `user_children`) answers 404, the same as a
   child that does not exist, so other families' ids cannot be probed.
 
@@ -173,6 +184,39 @@ Delete sets `deleted_at`. The activity then disappears from every list, get and
 recommendation, and a second delete is 404. Completions that point at it are kept, so a
 child's history and streak do not change. There is no undelete endpoint.
 
+### Children: add a child (signed in)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/children` | create a child profile and link it to the caller |
+
+Needs [user authentication](#user-authentication); every role may call it. The child row and
+its `user_children` link to the caller are written in one transaction, so the caller is the
+child's first parent and a child never exists without one.
+
+```json
+{"name": "Amir", "age": 4, "gender": "male", "photo_id": null}
+```
+
+| Field | Rules |
+|---|---|
+| `name` | required, trimmed, at most 100 characters |
+| `age` | required, years, 0 to 18 (wider than the 2 to 6 activity range so the profile stays valid) |
+| `gender` | required, `male` or `female` (case-insensitive) |
+| `photo_id` | optional id from `POST /v1/media`; an unknown id is 422 |
+
+Response `data` is the child: `id`, `name`, `age`, `gender`, `photo_id`, `created_at`,
+`updated_at`. Use `id` in the `/v1/children/{id}/...` endpoints below. Errors: 400 bad JSON,
+401 no or invalid token, 422 a rule above.
+
+```bash
+curl -X POST localhost:8080/v1/children \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Amir","age":4,"gender":"male"}'
+```
+
+There is no endpoint yet to list, edit or delete a child or to add a second parent.
+
 ### Children: recommendation, completions, streak (signed in)
 
 All of these need [user authentication](#user-authentication) and a child linked to the
@@ -184,9 +228,6 @@ caller. Days are calendar days in Uzbekistan time (UTC+5, `domain.Location`).
 | POST | `/v1/children/{id}/completions` | mark an activity done today, with an optional reflection note |
 | GET | `/v1/children/{id}/completions` | the child's completions, newest first (paged) |
 | GET | `/v1/children/{id}/streak` | streak and progress counters |
-
-Child profiles have no endpoints yet, so a client cannot create or link a child through the
-API. Until it can, create them with the `store.Child()` repository or SQL.
 
 #### Recommendation
 
@@ -359,7 +400,9 @@ Sign-up and access token refresh. Tokens are HS256 JWTs signed with `JWT_SECRET`
 Token claims: `sub` is the user id, `typ` is `access` or `refresh`, `role` is the user's
 `user_auth.role` when the token was issued (`user`, `admin` or `paid_user`), plus `iss`
 (`JWT_ISSUER`), `iat`, `exp` and a unique `jti`. An access token lives `JWT_ACCESS_TTL`
-(15 min), a refresh token `JWT_REFRESH_TTL` (30 days). A token of one type is rejected where
+(24 hours). A refresh token has no `exp` and never expires while `JWT_REFRESH_TTL` is 0, the
+default; it stops working only when the user is deleted or `JWT_SECRET` changes. Set
+`JWT_REFRESH_TTL` to a duration to give refresh tokens an expiry again. A token of one type is rejected where
 the other is expected. Endpoints for signed-in users take the access token as
 `Authorization: Bearer <access_token>`; see [User authentication](#user-authentication).
 
@@ -383,7 +426,7 @@ Flow: `POST /v1/otp/send` and `POST /v1/otp/verify` with `purpose: sign_up`, the
 Response `data`:
 
 ```json
-{"access_token": "eyJ...", "refresh_token": "eyJ...", "expires_in": 900}
+{"access_token": "eyJ...", "refresh_token": "eyJ...", "expires_in": 86400}
 ```
 
 `expires_in` is the access token lifetime in seconds.
@@ -408,14 +451,15 @@ Behaviour (`usecases/user_signup`):
 {"refresh_token": "eyJ..."}
 ```
 
-Response `data`: `{"access_token": "eyJ...", "expires_in": 900}`.
+Response `data`: `{"access_token": "eyJ...", "expires_in": 86400}`.
 
-The refresh token must be signed with `JWT_SECRET`, unexpired, of type `refresh`, and its
+The refresh token must be signed with `JWT_SECRET`, unexpired if it has an `exp`, of type `refresh`, and its
 SHA-256 must equal `user_auth.refresh_token` for the user in `sub`. Anything else, including a
 soft-deleted user (their `user_auth` row is gone), is 401 (-20) `refresh token is invalid or
 expired, sign in again`. The new access token's hash replaces `user_auth.access_token`; its `role` claim is read from
 `user_auth.role` at refresh time, so a changed role shows up in the next access token. The
-refresh token is not rotated; the client keeps it until it expires.
+refresh token is not rotated; the client keeps it for good (or until it expires, when
+`JWT_REFRESH_TTL` is set).
 
 ```bash
 curl -X POST localhost:8080/v1/auth/signup -H 'Content-Type: application/json' \
@@ -492,9 +536,10 @@ curl -X POST localhost:8080/v1/media --data-urlencode "file=$(base64 -i photo.jp
 
 ### Users (admin)
 
-Users are app accounts (parents and caregivers). There is no user-facing auth yet, so these
-endpoints are admin-only. Deleting is a soft delete; deleted users behave as if they do not
-exist on every endpoint below.
+Users are app accounts (parents and caregivers). These endpoints are admin-only. Deleting is a
+soft delete; deleted users behave as if they do not exist on every endpoint below. Deleting a
+user also deletes their children that have no other parent, and unlinks them from shared ones
+(see [data-model.md](data-model.md#user_children)).
 
 | Method | Path | Description |
 |---|---|---|

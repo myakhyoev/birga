@@ -79,6 +79,12 @@ type TokenClaims struct {
 	Role   UserRole
 }
 
+// Principal is the signed-in user behind a request: who they are and their current role.
+type Principal struct {
+	UserID string
+	Role   UserRole
+}
+
 // HashToken returns the stored form of a token, so a database leak does not leak usable tokens.
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))

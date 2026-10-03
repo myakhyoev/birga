@@ -75,3 +75,33 @@ func TestIssueParse(t *testing.T) {
 		t.Fatalf("expired refresh: %v", err)
 	}
 }
+
+func TestRefreshWithoutExpiry(t *testing.T) {
+	forever := cfg
+	forever.RefreshTTL = 0
+
+	iss, err := New(forever)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	iss.now = func() time.Time { return now }
+
+	access, _ := iss.Issue(userID, domain.UserRoleUser, domain.TokenTypeAccess)
+	refresh, _ := iss.Issue(userID, domain.UserRoleUser, domain.TokenTypeRefresh)
+
+	now = now.Add(10 * 365 * 24 * time.Hour)
+
+	if _, err := iss.Parse(refresh, domain.TokenTypeRefresh); err != nil {
+		t.Fatalf("refresh after 10 years: %v", err)
+	}
+
+	if _, err := iss.Parse(access, domain.TokenTypeAccess); !errors.Is(err, errs.ErrUnauthorized) {
+		t.Fatalf("access still expires: %v", err)
+	}
+
+	if _, err := iss.Parse(refresh, domain.TokenTypeAccess); !errors.Is(err, errs.ErrUnauthorized) {
+		t.Fatalf("refresh as access: %v", err)
+	}
+}

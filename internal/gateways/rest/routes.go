@@ -5,6 +5,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	_ "gitlab.com/loyihalar/birga/backend/api/docs" // required by swagger to load generated docs files
+	"gitlab.com/loyihalar/birga/backend/internal/domain"
 )
 
 func (s *Server) endpoints() {
@@ -25,6 +26,9 @@ func (s *Server) endpoints() {
 
 		v1.POST("/media", s.UploadMedia())
 	}
+
+	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
+	v1.POST("/children", s.userAuth(domain.UserRoleUser, domain.UserRolePaidUser, domain.UserRoleAdmin), s.CreateChild())
 
 	child := v1.Group("/children/:id", s.userAuth())
 	{
