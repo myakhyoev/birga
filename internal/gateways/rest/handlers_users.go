@@ -30,7 +30,7 @@ type UpdateUserRequest struct {
 // @Summary creates a user
 // @Description - phone_number is required, in E.164 format (+998901234567)
 // @Description - username is optional: 3..32 latin letters, digits, '_' or '.'; stored lowercase
-// @Description - name is optional, at most 100 characters; photo_id is an optional UUID
+// @Description - name is optional, at most 100 characters; photo_id is an optional id from POST /v1/media (422 if unknown)
 // @Description - username and phone_number must be unique among non-deleted users (409)
 // @Tags admin
 // @Security AdminKey

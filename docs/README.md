@@ -8,7 +8,7 @@ and Russian.
 This repository is the Go API behind the app. Today it serves the activity catalogue and a
 small admin API for managing activities and users (create, read, update, soft delete), and
 sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for sign-up and
-account changes. Child profiles and completions are the next features.
+account changes, and uploads profile photos to AWS S3. Child profiles and completions are the next features.
 
 ## Start here
 

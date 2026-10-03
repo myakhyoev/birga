@@ -78,6 +78,11 @@ type otpVerifier interface {
 	Execute(ctx context.Context, req domain.OTPVerifyRequest) error
 }
 
+type mediaUploader interface {
+	Execute(ctx context.Context, up domain.MediaUpload) (domain.Media, error)
+	MaxSize() int64
+}
+
 // OTPUseCases groups the use cases behind the /v1/otp endpoints.
 type OTPUseCases struct {
 	Sender   otpSender
@@ -103,6 +108,9 @@ type Server struct {
 
 	otpSender   otpSender
 	otpVerifier otpVerifier
+
+	// mediaUploader is nil when S3 is not configured; POST /v1/media then answers 503.
+	mediaUploader mediaUploader
 }
 
 func New(cfg config.Application,
@@ -113,6 +121,7 @@ func New(cfg config.Application,
 	activityGetter activityGetter,
 	users UserUseCases,
 	otp OTPUseCases,
+	media mediaUploader,
 ) *Server {
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -142,6 +151,7 @@ func New(cfg config.Application,
 		userDeleter:     users.Deleter,
 		otpSender:       otp.Sender,
 		otpVerifier:     otp.Verifier,
+		mediaUploader:   media,
 	}
 
 	s.httpServer = &http.Server{

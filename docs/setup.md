@@ -84,6 +84,15 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `OTP_MAX_PER_PHONE_HOUR` | `5` | codes per phone per hour |
 | `OTP_MAX_PER_IP_HOUR` | `20` | codes per IP address per hour |
 | `OTP_MAX_VERIFY_ATTEMPTS` | `5` | wrong codes before the code is deleted |
+| `S3_BUCKET` | empty | S3 bucket for uploaded media (profile photos). Empty disables `POST /v1/media` (it answers 503) |
+| `S3_REGION` | `eu-central-1` | AWS region of the bucket |
+| `S3_ACCESS_KEY_ID` | empty | IAM access key; set it together with `S3_SECRET_ACCESS_KEY`. Both empty means the AWS default credential chain (`AWS_*` variables, `~/.aws`, an instance or task role) |
+| `S3_SECRET_ACCESS_KEY` | empty | IAM secret key. Keep it in the server's secret store, never in git |
+| `S3_ENDPOINT` | empty | S3-compatible endpoint (MinIO, LocalStack), e.g. `http://localhost:9000`; also switches to path-style URLs. Empty means AWS |
+| `S3_PUBLIC_BASE_URL` | empty | prefix of the photo URLs returned to clients, e.g. a CloudFront domain. Empty means `https://<bucket>.s3.<region>.amazonaws.com` (or `<endpoint>/<bucket>`) |
+| `S3_KEY_PREFIX` | empty | prefix for every object key, e.g. `staging/`, to share one bucket between environments |
+| `S3_TIMEOUT` | `30s` | timeout of one S3 request |
+| `MEDIA_MAX_SIZE` | `5242880` | largest accepted upload in bytes (5 MiB), after base64 decoding |
 
 When you add a setting, add it to `config.go`, `.env.example` and this table.
 
@@ -96,6 +105,26 @@ Keep `SMS_PROVIDER=log` while developing: `POST /v1/otp/send` then logs a line
 (smsxabar.uz) account and set `SMS_PROVIDER=playmobile`, `PLAYMOBILE_USERNAME`,
 `PLAYMOBILE_PASSWORD` and `PLAYMOBILE_ORIGINATOR` from the contract. The API refuses to start
 if `playmobile` is chosen without credentials.
+
+### Media (S3) locally
+
+Without `S3_BUCKET` the API starts normally and `POST /v1/media` answers 503. To try uploads,
+either point it at a real bucket or run MinIO:
+
+```bash
+docker run -d --name minio -p 9000:9000 -e MINIO_ROOT_USER=minio -e MINIO_ROOT_PASSWORD=minio123 \
+  minio/minio server /data
+docker exec minio mc alias set local http://localhost:9000 minio minio123
+docker exec minio mc mb local/birga-media && docker exec minio mc anonymous set download local/birga-media
+```
+
+and set `S3_BUCKET=birga-media S3_ENDPOINT=http://localhost:9000 S3_ACCESS_KEY_ID=minio
+S3_SECRET_ACCESS_KEY=minio123`.
+
+For AWS, the IAM user or role needs `s3:PutObject` and `s3:DeleteObject` on
+`arn:aws:s3:::<bucket>/<S3_KEY_PREFIX>media/*`. The returned `url` only opens if clients can
+read the objects: either a bucket policy allowing public `s3:GetObject` on that prefix, or a
+CloudFront distribution in front of the bucket (set `S3_PUBLIC_BASE_URL` to its domain).
 
 ## Database migrations
 

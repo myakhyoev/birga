@@ -25,6 +25,10 @@ type Application struct {
 	Redis *RedisConfig `env:", prefix=REDIS_"`
 
 	OTP *OTPConfig `env:", prefix=OTP_"`
+
+	S3 *S3Config `env:", prefix=S3_"`
+
+	Media *MediaConfig `env:", prefix=MEDIA_"`
 }
 
 func (c *Application) IsProduction() bool {
@@ -67,4 +71,29 @@ type RedisConfig struct {
 	// URL is a redis:// or rediss:// URL, e.g. redis://:password@localhost:6379/0
 	URL            string        `env:"URL, default=redis://localhost:6379/0"`
 	ConnectTimeout time.Duration `env:"CONNECT_TIMEOUT, default=5s"`
+}
+
+// S3Config configures the AWS S3 bucket that stores uploaded media. With Bucket empty, uploads are
+// disabled. With AccessKeyID empty, credentials come from the AWS default chain (AWS_* env vars,
+// shared config, an IAM role).
+type S3Config struct {
+	Bucket          string `env:"BUCKET"`
+	Region          string `env:"REGION, default=eu-central-1"`
+	AccessKeyID     string `env:"ACCESS_KEY_ID"`
+	SecretAccessKey string `env:"SECRET_ACCESS_KEY"`
+	// Endpoint overrides the AWS endpoint for S3-compatible storage (MinIO, LocalStack); it also
+	// switches to path-style URLs.
+	Endpoint string `env:"ENDPOINT"`
+	// PublicBaseURL is the prefix of the URLs returned to clients, e.g. a CloudFront domain.
+	// Empty means https://<bucket>.s3.<region>.amazonaws.com.
+	PublicBaseURL string `env:"PUBLIC_BASE_URL"`
+	// KeyPrefix is put in front of every object key, e.g. "staging/".
+	KeyPrefix string        `env:"KEY_PREFIX"`
+	Timeout   time.Duration `env:"TIMEOUT, default=30s"`
+}
+
+// MediaConfig limits uploaded media.
+type MediaConfig struct {
+	// MaxSize is the largest accepted file, in bytes, after base64 decoding.
+	MaxSize int64 `env:"MAX_SIZE, default=5242880"`
 }

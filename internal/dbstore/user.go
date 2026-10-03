@@ -16,7 +16,10 @@ import (
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 )
 
-const pgUniqueViolation = "23505"
+const (
+	pgUniqueViolation     = "23505"
+	pgForeignKeyViolation = "23503"
+)
 
 // Every query filters on deleted_at IS NULL: a soft-deleted user is invisible.
 type userRepo struct {
@@ -189,10 +192,19 @@ func nullIfEmpty(s string) *string {
 	return &s
 }
 
-// userConflict maps a unique-index violation to the matching conflict error, or returns nil.
+// userConflict maps a unique-index violation to the matching conflict error, and a photo_id
+// with no media row to ErrPhotoNotFound. It returns nil for any other error.
 func userConflict(err error) error {
 	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) || pgErr.Code != pgUniqueViolation {
+	if !errors.As(err, &pgErr) {
+		return nil
+	}
+
+	if pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == "users_photo_id_fkey" {
+		return errs.ErrPhotoNotFound
+	}
+
+	if pgErr.Code != pgUniqueViolation {
 		return nil
 	}
 

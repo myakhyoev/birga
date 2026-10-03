@@ -23,14 +23,14 @@ Every response, success or failure, has the same shape:
 | error_code | HTTP | Meaning | Typical cause |
 |---:|---:|---|---|
 | 0 | 200 | success | |
-| -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code |
+| -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key` |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured) |
 | -30 | 404 | not found | unknown id, unpublished activity on a public endpoint, soft-deleted user, OTP expired or not requested |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
-| -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable |
+| -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
 | -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or IP, too many wrong OTP codes |
 
 For 500s the client only sees `"internal error"`. Find the real message in the logs by the
@@ -232,6 +232,71 @@ curl -X POST localhost:8080/v1/otp/verify -H 'Content-Type: application/json' \
   -d '{"phone_number": "+998901234567", "purpose": "sign_up", "code": "480569"}'
 ```
 
+### Media (public)
+
+Uploads an image to AWS S3 and returns its id and URL. The app uploads a profile photo
+here first, then saves the returned `id` as the user's `photo_id`.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/media` | upload one image |
+
+The body is form data with one field, `file`, in any of these forms:
+
+- `multipart/form-data` with `file` as a file part (a normal file upload);
+- `multipart/form-data` or `application/x-www-form-urlencoded` with `file` as a base64
+  string. Standard or URL-safe base64, with or without padding, and an optional data URL
+  prefix such as `data:image/jpeg;base64,` are all accepted. In a urlencoded body the value
+  must be URL-encoded (every HTTP client does this for form data), otherwise `+` turns into
+  a space.
+
+Rules (`usecases/media_uploader`):
+
+- the type is detected from the bytes, not from the file name or `Content-Type`: JPEG, PNG
+  or WebP only, otherwise 422 `unsupported file type, upload a JPEG, PNG or WebP image`.
+  HEIC from iPhones is not accepted; the app should convert to JPEG before upload;
+- at most `MEDIA_MAX_SIZE` bytes after decoding (default 5 MiB), otherwise 422; an empty file
+  is 422 too;
+- a missing `file` field or invalid base64 is 400;
+- when S3 is not configured (`S3_BUCKET` empty) the endpoint answers 503 `media uploads are
+  disabled`; a failed S3 call is 500.
+
+The object is stored as `<S3_KEY_PREFIX>media/<id>.<ext>`. Response `data`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID string | the media id; put it in `photo_id` |
+| `url` | string | where clients load the image, `<S3_PUBLIC_BASE_URL>/<key>` |
+| `content_type` | string | `image/jpeg`, `image/png` or `image/webp` |
+| `size` | integer | bytes |
+
+The endpoint has no user authentication yet (there are no user tokens); it should move
+behind user auth once sign-in exists.
+
+Examples:
+
+```bash
+# a file
+curl -X POST localhost:8080/v1/media -F file=@photo.jpg
+
+# base64 in form data
+curl -X POST localhost:8080/v1/media --data-urlencode "file=$(base64 -i photo.jpg)"
+```
+
+```json
+{
+  "status": "Success",
+  "error_code": 0,
+  "error_note": "",
+  "data": {
+    "id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
+    "url": "https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg",
+    "content_type": "image/jpeg",
+    "size": 183244
+  }
+}
+```
+
 ### Users (admin)
 
 Users are app accounts (parents and caregivers). There is no user-facing auth yet, so these
@@ -271,7 +336,8 @@ Normalization and validation (`usecases/user_creator`, `usecases/user_updater`):
 - `phone_number`: E.164, a `+` and 8 to 15 characters in total, e.g. `+998901234567` (422);
 - `username`: 3 to 32 characters from `a-z`, `0-9`, `_`, `.` (422);
 - `name`: at most 100 characters (422);
-- `photo_id`: a UUID (422). It is not checked against any files table yet;
+- `photo_id`: a UUID (422) of an image uploaded with `POST /v1/media`; an id with no
+  `media` row is 422 `photo_id is not an uploaded media id, ...`;
 - `username` and `phone_number` must be unique among non-deleted users: 409 with
   `username is already taken` or `phone number is already taken`;
 - an id in the path that is not a UUID returns 400; an unknown or deleted user returns 404.
@@ -296,7 +362,7 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `name` | string or `null` | display name |
 | `username` | string or `null` | lowercase |
 | `phone_number` | string or `null` | E.164; always set for users created through the API |
-| `photo_id` | UUID string or `null` | profile photo id |
+| `photo_id` | UUID string or `null` | profile photo, a media id from `POST /v1/media` |
 | `created_at`, `updated_at` | RFC 3339 timestamp | `updated_at` changes on every update and on delete |
 
 `deleted_at` is never returned: deleted users are not returned at all.

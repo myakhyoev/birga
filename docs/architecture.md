@@ -22,7 +22,7 @@ middle, transport and storage at the edges.
    │ dbstore, redisstore │   │ drivers    │  storage / external services
    └──────┬──────────────┘   └─────┬──────┘
           ▼                        ▼
-   PostgreSQL, Redis          Play Mobile (SMS), ...
+   PostgreSQL, Redis          Play Mobile (SMS), AWS S3, ...
 
    domain/  plain types shared by every layer (no dependencies)
    errs/    application errors, mapped to HTTP codes by the gateway
@@ -40,12 +40,12 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP hashing |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP hashing |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
 | `internal/dbstore/` | PostgreSQL repositories and the transaction helper |
 | `internal/redisstore/` | Redis state: one-time codes and the send-OTP rate limiter (`store.OTP()`) |
-| `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier` |
+| `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -161,6 +161,14 @@ message id (a fresh UUID per send).
   misconfiguration (`ErrInternal`), 5xx and network errors as `ErrConnection`. Delivery
   reports (webhook) are not handled yet.
 - `internal/drivers/smslog` logs the message instead of sending it, for local development.
+
+- `internal/drivers/s3storage` stores files in S3 with the AWS SDK for Go v2 (the SDK, not
+  `pkg/remote`, because S3 needs SigV4 signing). Its HTTP client still goes through
+  `metrics.RoundTripper` (service `s3`). It offers `Put`, `Delete` and `URL(key)`; failures
+  become `ErrConnection`. Objects are written with `Cache-Control: public, max-age=31536000,
+  immutable`, since a key is never reused. `S3_ENDPOINT` points it at MinIO or LocalStack.
+  With `S3_BUCKET` empty, bootstrap builds no S3 client and no `media_uploader`, and the REST
+  server answers `POST /v1/media` with 503.
 
 Request and response bodies of outgoing calls are not logged (`httplog` without
 `WithBodies`), so OTP codes never reach the logs when Play Mobile is used.

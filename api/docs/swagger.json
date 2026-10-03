@@ -501,7 +501,7 @@
                         "AdminKey": []
                     }
                 ],
-                "description": "- phone_number is required, in E.164 format (+998901234567)\n- username is optional: 3..32 latin letters, digits, '_' or '.'; stored lowercase\n- name is optional, at most 100 characters; photo_id is an optional UUID\n- username and phone_number must be unique among non-deleted users (409)",
+                "description": "- phone_number is required, in E.164 format (+998901234567)\n- username is optional: 3..32 latin letters, digits, '_' or '.'; stored lowercase\n- name is optional, at most 100 characters; photo_id is an optional id from POST /v1/media (422 if unknown)\n- username and phone_number must be unique among non-deleted users (409)",
                 "consumes": [
                     "application/json"
                 ],
@@ -787,6 +787,75 @@
                         "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/media": {
+            "post": {
+                "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from\n- 503 when S3 is not configured (S3_BUCKET empty)",
+                "consumes": [
+                    "multipart/form-data",
+                    "application/x-www-form-urlencoded"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "media"
+                ],
+                "summary": "uploads an image (a profile photo) to S3",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "the image: a file part, or a base64 string in the same field",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.mediaView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ServiceUnavailableResponse"
                         }
                     }
                 }
@@ -1417,6 +1486,28 @@
                 "_errCodeUnavailable",
                 "_errCodeRateLimited"
             ]
+        },
+        "rest.mediaView": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string",
+                    "example": "image/jpeg"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "size": {
+                    "description": "bytes",
+                    "type": "integer",
+                    "example": 183244
+                },
+                "url": {
+                    "type": "string",
+                    "example": "https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"
+                }
+            }
         },
         "rest.sendOTPView": {
             "type": "object",

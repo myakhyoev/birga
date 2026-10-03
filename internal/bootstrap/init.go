@@ -11,13 +11,16 @@ import (
 
 	"gitlab.com/loyihalar/birga/backend/internal/config"
 	"gitlab.com/loyihalar/birga/backend/internal/dbstore"
+	"gitlab.com/loyihalar/birga/backend/internal/domain"
 	"gitlab.com/loyihalar/birga/backend/internal/drivers/playmobile"
+	"gitlab.com/loyihalar/birga/backend/internal/drivers/s3storage"
 	"gitlab.com/loyihalar/birga/backend/internal/drivers/smslog"
 	"gitlab.com/loyihalar/birga/backend/internal/gateways/rest"
 	"gitlab.com/loyihalar/birga/backend/internal/redisstore"
 	activitycreator "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_creator"
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
+	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
 	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
@@ -115,12 +118,37 @@ type smsSender interface {
 // drivers - integrations with other services.
 type drivers struct {
 	sms smsSender
+	// s3 is nil when S3_BUCKET is empty (media uploads disabled).
+	s3 *s3storage.Client
 }
 
 func buildDrivers(l *zap.Logger, cfg config.Application) *drivers {
 	return &drivers{
 		sms: buildSMSSender(l, cfg),
+		s3:  buildS3(l, cfg.S3),
 	}
+}
+
+// buildS3 returns nil, which disables POST /v1/media, when no bucket is configured.
+func buildS3(l *zap.Logger, cfg *config.S3Config) *s3storage.Client {
+	if cfg.Bucket == "" {
+		l.Warn("S3_BUCKET is empty: media uploads are disabled")
+
+		return nil
+	}
+
+	if (cfg.AccessKeyID == "") != (cfg.SecretAccessKey == "") {
+		l.Fatal("set both S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY, or neither to use the AWS default credentials")
+	}
+
+	c, err := s3storage.New(context.Background(), l.Named("driver.s3"), cfg)
+	if err != nil {
+		l.Fatal("s3storage.New", zap.Error(err))
+	}
+
+	l.Info("S3 storage configured", zap.String("bucket", cfg.Bucket), zap.String("region", cfg.Region))
+
+	return c
 }
 
 // buildSMSSender picks the SMS driver from SMS_PROVIDER. The log driver never reaches a phone,
@@ -162,9 +190,17 @@ type useCases struct {
 
 	otpSender   *otpsender.UseCase
 	otpVerifier *otpverifier.UseCase
+
+	// mediaUploader is nil when media uploads are disabled.
+	mediaUploader *mediauploader.UseCase
 }
 
 func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, cache *redisstore.Store, drv *drivers) *useCases {
+	var mediaUploader *mediauploader.UseCase
+	if drv.s3 != nil {
+		mediaUploader = mediauploader.New(l.Named("usecase.media_uploader"), store.Media(), drv.s3, cfg.Media.MaxSize, cfg.S3.KeyPrefix)
+	}
+
 	return &useCases{
 		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity()),
 		activityLister:  activitylister.New(l.Named("usecase.activity_lister"), store.Activity()),
@@ -178,10 +214,21 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), *cfg.OTP, cache.OTP()),
+
+		mediaUploader: mediaUploader,
 	}
 }
 
 func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCases) (*rest.Server, func()) {
+	// A nil *UseCase inside a non-nil interface would look enabled to the server, so pass a true nil.
+	var media interface {
+		Execute(ctx context.Context, up domain.MediaUpload) (domain.Media, error)
+		MaxSize() int64
+	}
+	if ucs.mediaUploader != nil {
+		media = ucs.mediaUploader
+	}
+
 	httpSrv := rest.New(
 		cfg,
 		l.Named("gateway.REST"),
@@ -200,6 +247,7 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Sender:   ucs.otpSender,
 			Verifier: ucs.otpVerifier,
 		},
+		media,
 	)
 
 	return httpSrv, func() {

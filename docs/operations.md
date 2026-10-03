@@ -72,6 +72,13 @@ database or Redis is unreachable).
 `docker-compose.yml` runs one; the devops stack does not include it yet, so add a Redis
 service there (no persistence or backups needed) before deploying this version.
 
+**S3.** Profile photos go to the bucket in `S3_BUCKET` (see
+[setup.md](setup.md#media-s3-locally) for the IAM permissions and public read access). Without
+it, uploads answer 503 and the rest of the API works. S3 calls show up in
+`birga_http_client_request_duration_seconds{service="s3"}`. Turn on bucket versioning or
+a lifecycle rule if old photos should be kept or expired; the API never deletes a photo
+that a media row points to.
+
 ## Backups
 
 The backup service dumps the `birga` and `metabase` databases on a schedule into

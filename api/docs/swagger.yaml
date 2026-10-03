@@ -329,6 +329,22 @@ definitions:
     - _errCodeInternalErr
     - _errCodeUnavailable
     - _errCodeRateLimited
+  rest.mediaView:
+    properties:
+      content_type:
+        example: image/jpeg
+        type: string
+      id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      size:
+        description: bytes
+        example: 183244
+        type: integer
+      url:
+        example: https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg
+        type: string
+    type: object
   rest.sendOTPView:
     properties:
       expires_in:
@@ -700,7 +716,7 @@ paths:
       description: |-
         - phone_number is required, in E.164 format (+998901234567)
         - username is optional: 3..32 latin letters, digits, '_' or '.'; stored lowercase
-        - name is optional, at most 100 characters; photo_id is an optional UUID
+        - name is optional, at most 100 characters; photo_id is an optional id from POST /v1/media (422 if unknown)
         - username and phone_number must be unique among non-deleted users (409)
       parameters:
       - description: user
@@ -885,6 +901,57 @@ paths:
       summary: updates a user partially
       tags:
       - admin
+  /v1/media:
+    post:
+      consumes:
+      - multipart/form-data
+      - application/x-www-form-urlencoded
+      description: |-
+        - send form data (multipart/form-data or application/x-www-form-urlencoded) with one field "file":
+        either the file itself (multipart file part) or the file as a base64 string; a data URL
+        prefix such as "data:image/png;base64," is allowed
+        - accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)
+        - at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)
+        - the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {"photo_id": id});
+        url is where clients load the image from
+        - 503 when S3 is not configured (S3_BUCKET empty)
+      parameters:
+      - description: 'the image: a file part, or a base64 string in the same field'
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.mediaView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/rest.ServiceUnavailableResponse'
+      summary: uploads an image (a profile photo) to S3
+      tags:
+      - media
   /v1/otp/send:
     post:
       consumes:
