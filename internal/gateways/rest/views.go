@@ -22,6 +22,7 @@ const (
 	_errCodeConflict     errCode = -40 // for http 409
 	_errCodeInternalErr  errCode = -50 // for http 500
 	_errCodeUnavailable  errCode = -60 // for http 503
+	_errCodeRateLimited  errCode = -70 // for http 429
 )
 
 type statusType string
@@ -88,6 +89,13 @@ type ServiceUnavailableResponse struct {
 	Data      any        `json:"data"`
 }
 
+type TooManyRequestsResponse struct {
+	Status    statusType `json:"status" example:"Failure"`
+	ErrorCode errCode    `json:"error_code" example:"-70"`
+	ErrorNote string     `json:"error_note" example:"a code was sent recently, request a new one in 42 seconds"`
+	Data      any        `json:"data"`
+}
+
 // Return writes data (on success) or maps err to an HTTP status and error code.
 func Return(c *gin.Context, data any, err error) {
 	if err == nil {
@@ -121,6 +129,8 @@ func Return(c *gin.Context, data any, err error) {
 		code, r.ErrorCode = http.StatusNotFound, _errCodeNotFound
 	case errors.Is(err, errs.ErrConflict):
 		code, r.ErrorCode = http.StatusConflict, _errCodeConflict
+	case errors.Is(err, errs.ErrRateLimited):
+		code, r.ErrorCode = http.StatusTooManyRequests, _errCodeRateLimited
 	default:
 		// Never leak internal details (SQL errors, hostnames) to clients;
 		// the access log keeps the original message.

@@ -217,3 +217,19 @@ func (u dbUser) toDomain() domain.User {
 		UpdatedAt:   u.UpdatedAt,
 	}
 }
+
+// ExistsByPhone reports whether an active user has this phone number.
+func (r *userRepo) ExistsByPhone(ctx context.Context, phone string) (bool, error) {
+	l := logger.FromCtx(ctx, "userRepo.ExistsByPhone")
+
+	var exists bool
+
+	q := `SELECT EXISTS (SELECT 1 FROM users WHERE phone_number = $1 AND deleted_at IS NULL)`
+	if err := r.store.sqlClientByCtx(ctx).QueryRow(ctx, q, phone).Scan(&exists); err != nil {
+		l.Error("sqlClient.QueryRow", zap.Error(err))
+
+		return false, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return exists, nil
+}

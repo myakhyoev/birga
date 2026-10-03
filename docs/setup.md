@@ -69,12 +69,26 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `POSTGRES_MAX_CONN_LIFETIME` | `30m` | recycle connections after this |
 | `POSTGRES_MAX_CONN_IDLE_TIME` | `5m` | close idle connections after this |
 | `POSTGRES_CONNECT_TIMEOUT` | `5s` | startup connect + ping timeout; the process exits if exceeded |
-| `SMS_SERVICE_BASE_URL` | `http://localhost:8081` | SMS gateway base URL |
-| `SMS_SERVICE_TOKEN` | empty | bearer token for the SMS gateway |
-| `SMS_SERVICE_FROM` | `4546` | sender id |
-| `SMS_SERVICE_TIMEOUT` | `10s` | SMS request timeout |
+| `SMS_PROVIDER` | `log` | `playmobile` sends real SMS; `log` writes them (and OTP codes) to the log. `log` is refused when `ENVIRONMENT=production` |
+| `PLAYMOBILE_BASE_URL` | `https://send.smsxabar.uz` | Play Mobile API host; requests go to `<base>/broker-api/send` |
+| `PLAYMOBILE_USERNAME` | empty | Play Mobile login (HTTP Basic auth); required when `SMS_PROVIDER=playmobile` |
+| `PLAYMOBILE_PASSWORD` | empty | Play Mobile password; required when `SMS_PROVIDER=playmobile`. Keep it in the server's secret store, never in git |
+| `PLAYMOBILE_ORIGINATOR` | `3700` | sender name or short number registered with Play Mobile |
+| `PLAYMOBILE_TIMEOUT` | `10s` | Play Mobile request timeout |
+| `OTP_TTL` | `3m` | how long a code is valid |
+| `OTP_RESEND_COOLDOWN` | `1m` | minimum gap between codes for one phone and purpose |
+| `OTP_MAX_PER_PHONE_HOUR` | `5` | codes per phone per hour |
+| `OTP_MAX_PER_IP_HOUR` | `20` | codes per IP address per hour |
 
 When you add a setting, add it to `config.go`, `.env.example` and this table.
+
+### SMS locally
+
+Keep `SMS_PROVIDER=log` while developing: `POST /v1/otp/send` then logs a line
+`sms not sent (SMS_PROVIDER=log)` with the code in `text`. To send real SMS, get a Play Mobile
+(smsxabar.uz) account and set `SMS_PROVIDER=playmobile`, `PLAYMOBILE_USERNAME`,
+`PLAYMOBILE_PASSWORD` and `PLAYMOBILE_ORIGINATOR` from the contract. The API refuses to start
+if `playmobile` is chosen without credentials.
 
 ## Database migrations
 

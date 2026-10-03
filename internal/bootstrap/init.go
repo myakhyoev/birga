@@ -10,11 +10,13 @@ import (
 
 	"gitlab.com/loyihalar/birga/backend/internal/config"
 	"gitlab.com/loyihalar/birga/backend/internal/dbstore"
-	smsservice "gitlab.com/loyihalar/birga/backend/internal/drivers/sms_service"
+	"gitlab.com/loyihalar/birga/backend/internal/drivers/playmobile"
+	"gitlab.com/loyihalar/birga/backend/internal/drivers/smslog"
 	"gitlab.com/loyihalar/birga/backend/internal/gateways/rest"
 	activitycreator "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_creator"
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
+	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
 	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
 	usergetter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_getter"
@@ -59,15 +61,44 @@ func initDB(l *zap.Logger, cfg *config.DB) (*pgxpool.Pool, func()) {
 	}
 }
 
+// smsSender is satisfied by every SMS driver.
+type smsSender interface {
+	Send(ctx context.Context, messageID, phone, text string) error
+}
+
 // drivers - integrations with other services.
 type drivers struct {
-	// sms is ready for the upcoming phone sign-in (OTP) use case.
-	sms *smsservice.Client
+	sms smsSender
 }
 
 func buildDrivers(l *zap.Logger, cfg config.Application) *drivers {
 	return &drivers{
-		sms: smsservice.New(l.Named("driver.sms"), cfg.SMSService),
+		sms: buildSMSSender(l, cfg),
+	}
+}
+
+// buildSMSSender picks the SMS driver from SMS_PROVIDER. The log driver never reaches a phone,
+// so it is refused in production.
+func buildSMSSender(l *zap.Logger, cfg config.Application) smsSender {
+	switch cfg.SMSProvider {
+	case "playmobile":
+		if cfg.PlayMobile.Username == "" || cfg.PlayMobile.Password == "" {
+			l.Fatal("SMS_PROVIDER=playmobile needs PLAYMOBILE_USERNAME and PLAYMOBILE_PASSWORD")
+		}
+
+		return playmobile.New(l.Named("driver.playmobile"), cfg.PlayMobile)
+	case "log":
+		if cfg.IsProduction() {
+			l.Fatal("SMS_PROVIDER=log is not allowed in production")
+		}
+
+		l.Warn("SMS_PROVIDER=log: SMS are written to the log, not sent")
+
+		return smslog.New(l.Named("driver.smslog"))
+	default:
+		l.Fatal("unknown SMS_PROVIDER", zap.String("value", cfg.SMSProvider))
+
+		return nil
 	}
 }
 
@@ -82,9 +113,11 @@ type useCases struct {
 	userGetter  *usergetter.UseCase
 	userUpdater *userupdater.UseCase
 	userDeleter *userdeleter.UseCase
+
+	otpSender *otpsender.UseCase
 }
 
-func buildUseCases(l *zap.Logger, store *dbstore.DBStore, _ *drivers) *useCases {
+func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, drv *drivers) *useCases {
 	return &useCases{
 		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity()),
 		activityLister:  activitylister.New(l.Named("usecase.activity_lister"), store.Activity()),
@@ -95,6 +128,8 @@ func buildUseCases(l *zap.Logger, store *dbstore.DBStore, _ *drivers) *useCases 
 		userGetter:  usergetter.New(l.Named("usecase.user_getter"), store.User()),
 		userUpdater: userupdater.New(l.Named("usecase.user_updater"), store.User()),
 		userDeleter: userdeleter.New(l.Named("usecase.user_deleter"), store.User()),
+
+		otpSender: otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, store, store.OTP(), store.User(), drv.sms),
 	}
 }
 
@@ -112,6 +147,9 @@ func initREST(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, ucs
 			Getter:  ucs.userGetter,
 			Updater: ucs.userUpdater,
 			Deleter: ucs.userDeleter,
+		},
+		rest.OTPUseCases{
+			Sender: ucs.otpSender,
 		},
 	)
 

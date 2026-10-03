@@ -22,7 +22,7 @@ middle, transport and storage at the edges.
    │ dbstore    │   │ drivers    │  PostgreSQL repositories / external services
    └──────┬─────┘   └─────┬──────┘
           ▼               ▼
-      PostgreSQL     SMS gateway, ...
+      PostgreSQL     Play Mobile (SMS), ...
 
    domain/  plain types shared by every layer (no dependencies)
    errs/    application errors, mapped to HTTP codes by the gateway
@@ -40,11 +40,11 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`), constants and format checks (goals, age range, username, phone) |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTP`, `OTPPurpose`, `OTPSendRequest`), constants and format checks (goals, age range, username, phone, Uzbek phone), OTP hashing |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
 | `internal/dbstore/` | PostgreSQL repositories and the transaction helper |
-| `internal/drivers/` | clients for external services, one package each (`sms_service`) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter` |
+| `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender) |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -64,7 +64,8 @@ resource that needs closing:
 2. PostgreSQL pool (`pgxpool`) with the metrics tracer; the process exits if the database
    cannot be pinged within `POSTGRES_CONNECT_TIMEOUT`.
 3. `dbstore.New(pool)`.
-4. Drivers (currently the SMS client, not yet used by any use case).
+4. Drivers: the SMS sender chosen by `SMS_PROVIDER` (`playmobile` or `log`). Startup fails on
+   an unknown provider, on `playmobile` without credentials, and on `log` in production.
 5. Use cases.
 6. REST server.
 
@@ -91,7 +92,8 @@ A handler parses input, calls one use case, and passes the result to `rest.Retur
 writes the response envelope.
 
 `rest.New` takes each activity use case as its own argument; the user use cases come grouped
-in `rest.UserUseCases` (creator, lister, getter, updater, deleter). Group the use cases of
+in `rest.UserUseCases` (creator, lister, getter, updater, deleter) and the OTP ones in
+`rest.OTPUseCases` (sender). Group the use cases of
 new resources the same way rather than growing the argument list.
 
 ## Errors
@@ -109,7 +111,7 @@ The full mapping table is in [api.md](api.md#errors).
 
 ## Database access
 
-- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`).
+- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`, `store.OTP()`).
 - `DBStore.InTx(ctx, fn)` runs `fn` in a read-committed transaction. Repository calls made
   with the `ctx` that `fn` receives join the transaction automatically
   (`sqlClientByCtx` picks the `pgx.Tx` from the context, or the pool otherwise).
@@ -120,6 +122,9 @@ The full mapping table is in [api.md](api.md#errors).
   repository query, and delete is an `UPDATE ... SET deleted_at = NOW()`.
 - A unique-index violation (`23505`) is mapped to a specific `errs.ErrConflict` error by
   constraint name (`userConflict`), which the gateway turns into a 409.
+- Check-then-insert logic that must not race (OTP rate limits) runs inside `InTx` after a
+  transaction-scoped advisory lock on the natural key (`otpRepo.LockPhone`). Use cases that
+  need a transaction declare a small `txRunner` interface that `DBStore` satisfies.
 - Rows scan into `db*` structs with `db:"..."` tags and convert to domain types with
   `toDomain()`.
 
@@ -130,9 +135,21 @@ A driver wraps one external service using `pkg/remote`, with `pkg/metrics.RoundT
 provider failures to `errs` values (4xx to `ErrBadRequest`, transport failures to
 `ErrConnection`).
 
-The SMS driver (`internal/drivers/sms_service`) sends a message and returns the provider's
-id. Its request contract is generic and must be adapted to the provider chosen (Eskiz, Play
-Mobile, ...). It is built at startup for the upcoming phone sign-in (OTP) feature.
+SMS drivers implement `Send(ctx, messageID, phone, text) error`; the use case passes its own
+message id (the OTP row id).
+
+- `internal/drivers/playmobile` calls Play Mobile (smsxabar.uz): `POST
+  <PLAYMOBILE_BASE_URL>/broker-api/send` with HTTP Basic auth and
+  `{"messages": [{"recipient": "998901234567", "message-id": "<id>", "sms": {"originator":
+  "<PLAYMOBILE_ORIGINATOR>", "content": {"text": "..."}}}]}`. Any 2xx means accepted (the body
+  is plain text). A 400 carries `{"error-code", "error-description"}` (for example 102 account
+  locked, 401 empty originator); since input is validated first, 4xx is treated as our
+  misconfiguration (`ErrInternal`), 5xx and network errors as `ErrConnection`. Delivery
+  reports (webhook) are not handled yet.
+- `internal/drivers/smslog` logs the message instead of sending it, for local development.
+
+Request and response bodies of outgoing calls are not logged (`httplog` without
+`WithBodies`), so OTP codes never reach the logs when Play Mobile is used.
 
 ## Adding a feature
 

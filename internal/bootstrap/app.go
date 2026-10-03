@@ -47,7 +47,7 @@ func New(cfg config.Application) *App {
 	drv := buildDrivers(l, cfg)
 
 	// build usecases
-	ucs := buildUseCases(l, store, drv)
+	ucs := buildUseCases(l, cfg, store, drv)
 
 	httpSrv, shutdown := initREST(l, cfg, store, ucs)
 	teardown = append(teardown, shutdown)

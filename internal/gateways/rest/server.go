@@ -70,6 +70,15 @@ type UserUseCases struct {
 	Deleter userDeleter
 }
 
+type otpSender interface {
+	Execute(ctx context.Context, req domain.OTPSendRequest) (domain.OTPSendResult, error)
+}
+
+// OTPUseCases groups the use cases behind the /v1/otp endpoints.
+type OTPUseCases struct {
+	Sender otpSender
+}
+
 type Server struct {
 	l          logger.Logger
 	router     *gin.Engine
@@ -86,6 +95,8 @@ type Server struct {
 	userGetter  userGetter
 	userUpdater userUpdater
 	userDeleter userDeleter
+
+	otpSender otpSender
 }
 
 func New(cfg config.Application,
@@ -95,6 +106,7 @@ func New(cfg config.Application,
 	activityLister activityLister,
 	activityGetter activityGetter,
 	users UserUseCases,
+	otp OTPUseCases,
 ) *Server {
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -122,6 +134,7 @@ func New(cfg config.Application,
 		userGetter:      users.Getter,
 		userUpdater:     users.Updater,
 		userDeleter:     users.Deleter,
+		otpSender:       otp.Sender,
 	}
 
 	s.httpServer = &http.Server{

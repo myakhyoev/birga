@@ -6,8 +6,9 @@ caregiver's goal, available time), and tracks completions and streaks. Content i
 and Russian.
 
 This repository is the Go API behind the app. Today it serves the activity catalogue and a
-small admin API for managing activities and users (create, read, update, soft delete). Child
-profiles, completions and phone sign-in are the next features.
+small admin API for managing activities and users (create, read, update, soft delete), and
+sends one-time SMS codes through Play Mobile for sign-up and account changes. Verifying those
+codes, child profiles and completions are the next features.
 
 ## Start here
 

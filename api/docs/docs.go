@@ -798,6 +798,82 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/otp/send": {
+            "post": {
+                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise) or update_user\n- ip_address: the end user's IPv4 or IPv6 address, used for rate limits\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- limits (429): one code per phone and purpose per resend_in seconds, and per hour at most\nOTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "otp"
+                ],
+                "summary": "sends a one-time code by SMS",
+                "parameters": [
+                    {
+                        "description": "where and why to send the code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.SendOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.sendOTPView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/rest.TooManyRequestsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -995,6 +1071,27 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.SendOTPRequest": {
+            "type": "object",
+            "properties": {
+                "ip_address": {
+                    "type": "string",
+                    "example": "203.0.113.7"
+                },
+                "phone_number": {
+                    "type": "string",
+                    "example": "+998901234567"
+                },
+                "purpose": {
+                    "type": "string",
+                    "enum": [
+                        "sign_up",
+                        "update_user"
+                    ],
+                    "example": "sign_up"
+                }
+            }
+        },
         "rest.ServiceUnavailableResponse": {
             "type": "object",
             "properties": {
@@ -1010,6 +1107,32 @@ const docTemplate = `{
                 "error_note": {
                     "type": "string",
                     "example": "database unavailable"
+                },
+                "status": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.statusType"
+                        }
+                    ],
+                    "example": "Failure"
+                }
+            }
+        },
+        "rest.TooManyRequestsResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error_code": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/rest.errCode"
+                        }
+                    ],
+                    "example": -70
+                },
+                "error_note": {
+                    "type": "string",
+                    "example": "a code was sent recently, request a new one in 42 seconds"
                 },
                 "status": {
                     "allOf": [
@@ -1177,7 +1300,8 @@ const docTemplate = `{
                 -30,
                 -40,
                 -50,
-                -60
+                -60,
+                -70
             ],
             "x-enum-comments": {
                 "_errCodeBadRequest": "for http 400",
@@ -1186,6 +1310,7 @@ const docTemplate = `{
                 "_errCodeInternalErr": "for http 500",
                 "_errCodeNoError": "Success code.",
                 "_errCodeNotFound": "for http 404",
+                "_errCodeRateLimited": "for http 429",
                 "_errCodeUnauthorized": "for http 401",
                 "_errCodeUnavailable": "for http 503",
                 "_errCodeValidation": "for http 422"
@@ -1199,7 +1324,8 @@ const docTemplate = `{
                 "for http 404",
                 "for http 409",
                 "for http 500",
-                "for http 503"
+                "for http 503",
+                "for http 429"
             ],
             "x-enum-varnames": [
                 "_errCodeNoError",
@@ -1210,8 +1336,24 @@ const docTemplate = `{
                 "_errCodeNotFound",
                 "_errCodeConflict",
                 "_errCodeInternalErr",
-                "_errCodeUnavailable"
+                "_errCodeUnavailable",
+                "_errCodeRateLimited"
             ]
+        },
+        "rest.sendOTPView": {
+            "type": "object",
+            "properties": {
+                "expires_in": {
+                    "description": "seconds until the code expires",
+                    "type": "integer",
+                    "example": 180
+                },
+                "resend_in": {
+                    "description": "seconds until a new code may be requested",
+                    "type": "integer",
+                    "example": 60
+                }
+            }
         },
         "rest.statusType": {
             "type": "string",

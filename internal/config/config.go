@@ -16,7 +16,13 @@ type Application struct {
 
 	Postgres *DB `env:", prefix=POSTGRES_"`
 
-	SMSService *SMSServiceConfig `env:", prefix=SMS_SERVICE_"`
+	// SMSProvider picks the SMS driver: "playmobile" sends real SMS, "log" only logs them
+	// (local development; refused in production).
+	SMSProvider string `env:"SMS_PROVIDER, default=log"`
+
+	PlayMobile *PlayMobileConfig `env:", prefix=PLAYMOBILE_"`
+
+	OTP *OTPConfig `env:", prefix=OTP_"`
 }
 
 func (c *Application) IsProduction() bool {
@@ -34,10 +40,20 @@ type DB struct {
 	ConnectTimeout  time.Duration `env:"CONNECT_TIMEOUT, default=5s"`
 }
 
-// SMSServiceConfig configures the SMS gateway driver.
-type SMSServiceConfig struct {
-	BaseURL string        `env:"BASE_URL, default=http://localhost:8081"`
-	Token   string        `env:"TOKEN"`
-	From    string        `env:"FROM, default=4546"`
-	Timeout time.Duration `env:"TIMEOUT, default=10s"`
+// PlayMobileConfig configures the Play Mobile (smsxabar.uz) SMS driver. Username, password
+// and originator come from the Play Mobile contract.
+type PlayMobileConfig struct {
+	BaseURL    string        `env:"BASE_URL, default=https://send.smsxabar.uz"`
+	Username   string        `env:"USERNAME"`
+	Password   string        `env:"PASSWORD"`
+	Originator string        `env:"ORIGINATOR, default=3700"`
+	Timeout    time.Duration `env:"TIMEOUT, default=10s"`
+}
+
+// OTPConfig controls one-time codes sent by SMS and the limits on sending them.
+type OTPConfig struct {
+	TTL             time.Duration `env:"TTL, default=3m"`
+	ResendCooldown  time.Duration `env:"RESEND_COOLDOWN, default=1m"`
+	MaxPerPhoneHour int           `env:"MAX_PER_PHONE_HOUR, default=5"`
+	MaxPerIPHour    int           `env:"MAX_PER_IP_HOUR, default=20"`
 }
