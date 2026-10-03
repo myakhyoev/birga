@@ -179,6 +179,26 @@ func buildSMSSender(l *zap.Logger, cfg config.Application) smsSender {
 	}
 }
 
+// checkOTPDefaultCode refuses OTP_DEFAULT_CODE in production or in a wrong format, and warns
+// when it is on.
+func checkOTPDefaultCode(l *zap.Logger, cfg config.Application) config.OTPConfig {
+	code := cfg.OTP.DefaultCode
+	if code == "" {
+		return *cfg.OTP
+	}
+
+	switch {
+	case cfg.IsProduction():
+		l.Fatal("OTP_DEFAULT_CODE is not allowed in production")
+	case !domain.IsValidOTPCode(code):
+		l.Fatal("OTP_DEFAULT_CODE must be 6 digits")
+	}
+
+	l.Warn("OTP_DEFAULT_CODE is set: verify accepts it for any phone number")
+
+	return *cfg.OTP
+}
+
 // useCases - Helper structure for passing usecases into gateways
 type useCases struct {
 	activityCreator *activitycreator.UseCase
@@ -224,7 +244,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		userDeleter: userdeleter.New(l.Named("usecase.user_deleter"), store.User()),
 
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
-		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), *cfg.OTP, cache.OTP()),
+		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), checkOTPDefaultCode(l, cfg), cache.OTP()),
 
 		signUp:         usersignup.New(l.Named("usecase.user_signup"), cache.OTP(), store, store.User(), store.Auth(), jwt),
 		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),

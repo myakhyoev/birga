@@ -18,6 +18,13 @@ type fakeOTPs struct {
 	maxAttempts int
 	verifiedTTL time.Duration
 	called      bool
+	marked      bool
+}
+
+func (f *fakeOTPs) MarkVerified(_ context.Context, _ string, _ domain.OTPPurpose, verifiedTTL time.Duration) error {
+	f.marked, f.verifiedTTL = true, verifiedTTL
+
+	return nil
 }
 
 func (f *fakeOTPs) VerifyCode(_ context.Context, _ string, _ domain.OTPPurpose, hash string, maxAttempts int, verifiedTTL time.Duration) (domain.OTPVerifyOutcome, int, error) {
@@ -74,5 +81,34 @@ func TestExecute_Validation(t *testing.T) {
 		if err := New(nil, cfg, otps).Execute(context.Background(), r); !errors.Is(err, errs.ErrValidation) || otps.called {
 			t.Fatalf("%s: expected validation error before the store, got %v", name, err)
 		}
+	}
+}
+
+func TestExecute_DefaultCode(t *testing.T) {
+	withDefault := cfg
+	withDefault.DefaultCode = "000000"
+
+	r := req()
+	r.Code = "000000"
+
+	otps := &fakeOTPs{outcome: domain.OTPNotFound}
+	if err := New(nil, withDefault, otps).Execute(context.Background(), r); err != nil || !otps.marked || otps.called {
+		t.Fatalf("default code: err=%v marked=%v checked=%v", err, otps.marked, otps.called)
+	}
+
+	if otps.verifiedTTL != cfg.VerifiedTTL {
+		t.Fatalf("verified ttl = %v", otps.verifiedTTL)
+	}
+
+	// Any other code is checked as usual.
+	otps = &fakeOTPs{outcome: domain.OTPMatched}
+	if err := New(nil, withDefault, otps).Execute(context.Background(), req()); err != nil || otps.marked || !otps.called {
+		t.Fatalf("real code: err=%v marked=%v checked=%v", err, otps.marked, otps.called)
+	}
+
+	// Without OTP_DEFAULT_CODE, "000000" is just a code.
+	otps = &fakeOTPs{outcome: domain.OTPNotFound}
+	if err := New(nil, cfg, otps).Execute(context.Background(), r); !errors.Is(err, errs.ErrNotFound) || otps.marked {
+		t.Fatalf("default off: err=%v marked=%v", err, otps.marked)
 	}
 }

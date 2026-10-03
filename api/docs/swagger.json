@@ -1085,7 +1085,7 @@
         },
         "/v1/otp/verify": {
             "post": {
-                "description": "- phone_number and purpose must be the ones the code was sent for; code is 6 digits (422)\n- a matching code is deleted, so it works only once; data is null\n- wrong code: 422 with the attempts left; after OTP_MAX_VERIFY_ATTEMPTS wrong codes the\ncode is deleted and the answer is 429\n- no code (never sent, expired after 2 minutes, or already used): 404",
+                "description": "- phone_number and purpose must be the ones the code was sent for; code is 6 digits (422)\n- a matching code is deleted, so it works only once; data is null\n- wrong code: 422 with the attempts left; after OTP_MAX_VERIFY_ATTEMPTS wrong codes the\ncode is deleted and the answer is 429\n- no code (never sent, expired after 2 minutes, or already used): 404\n- OTP_DEFAULT_CODE, when configured (never in production), is accepted for any phone\nand purpose without checking",
                 "consumes": [
                     "application/json"
                 ],

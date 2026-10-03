@@ -1178,6 +1178,8 @@ paths:
         - wrong code: 422 with the attempts left; after OTP_MAX_VERIFY_ATTEMPTS wrong codes the
         code is deleted and the answer is 429
         - no code (never sent, expired after 2 minutes, or already used): 404
+        - OTP_DEFAULT_CODE, when configured (never in production), is accepted for any phone
+        and purpose without checking
       parameters:
       - description: code to check
         in: body

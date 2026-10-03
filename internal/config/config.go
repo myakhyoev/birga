@@ -68,6 +68,9 @@ type OTPConfig struct {
 	MaxVerifyAttempts int `env:"MAX_VERIFY_ATTEMPTS, default=5"`
 	// VerifiedTTL is how long a verified sign_up code lets the phone number sign up.
 	VerifiedTTL time.Duration `env:"VERIFIED_TTL, default=10m"`
+	// DefaultCode, when set, is accepted by verify for any phone and purpose without checking
+	// Redis (for development and app review). Startup fails if it is set in production.
+	DefaultCode string `env:"DEFAULT_CODE"`
 }
 
 // JWTConfig configures the access and refresh tokens (HS256 JWTs).

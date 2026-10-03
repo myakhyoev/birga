@@ -84,6 +84,7 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `OTP_MAX_PER_PHONE_HOUR` | `5` | codes per phone per hour |
 | `OTP_MAX_PER_IP_HOUR` | `20` | codes per IP address per hour |
 | `OTP_MAX_VERIFY_ATTEMPTS` | `5` | wrong codes before the code is deleted |
+| `OTP_DEFAULT_CODE` | empty | 6 digits that `POST /v1/otp/verify` accepts for any phone without checking (development, testing, app review). Empty turns it off; the process exits if it is set with `ENVIRONMENT=production` or is not 6 digits. `.env.example` sets `654321` |
 | `OTP_VERIFIED_TTL` | `10m` | how long a matched code marks the phone as verified; `POST /v1/auth/signup` needs a `sign_up` mark |
 | `JWT_SECRET` | **required** | HS256 key for access and refresh tokens, at least 32 bytes (the process exits otherwise). Generate with `openssl rand -hex 32`, keep it in the server's secret store. Changing it invalidates every issued token. `.env.example` has a development-only value |
 | `JWT_ISSUER` | `birga` | `iss` claim written into and required from every token |
@@ -102,6 +103,9 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 When you add a setting, add it to `config.go`, `.env.example` and this table.
 
 ### SMS locally
+
+With `.env.example` as is, `OTP_DEFAULT_CODE=654321`: after (or even without) `POST /v1/otp/send`,
+verify with code `654321`.
 
 Keep `SMS_PROVIDER=log` while developing: `POST /v1/otp/send` then logs a line
 `sms not sent (SMS_PROVIDER=log)` with the code in `text`, which you pass to

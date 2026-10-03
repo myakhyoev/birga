@@ -78,6 +78,8 @@ type VerifyOTPRequest struct {
 // @Description - wrong code: 422 with the attempts left; after OTP_MAX_VERIFY_ATTEMPTS wrong codes the
 // @Description   code is deleted and the answer is 429
 // @Description - no code (never sent, expired after 2 minutes, or already used): 404
+// @Description - OTP_DEFAULT_CODE, when configured (never in production), is accepted for any phone
+// @Description   and purpose without checking
 // @Tags otp
 // @Accept json
 // @Produce json
