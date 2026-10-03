@@ -324,6 +324,13 @@ A malformed field returns 422 before the code is looked up.
 | wrong code | 422 | -10 | `wrong code, N attempts left` |
 | wrong code and no attempts left (`OTP_MAX_VERIFY_ATTEMPTS`, 5); the code is deleted | 429 | -70 | `too many wrong codes, request a new one` |
 | no code: never sent, expired, already used, or deleted after too many attempts | 404 | -30 | `code expired or was not requested, request a new one` |
+| `code` equals `OTP_DEFAULT_CODE` (when set) | 200 | 0 | phone marked verified without checking; any pending code is dropped |
+
+**Default code.** When `OTP_DEFAULT_CODE` is set (6 digits; `.env.example` uses `654321`),
+verify accepts it for any phone and purpose without a code having been sent, and marks the
+phone verified exactly as a real code does, so sign-up works with it. It is meant for local
+development, testing and app-store review. Unset means off; the API refuses to start with it in
+production. Each use logs a warning `otp verified with the default code`.
 
 The comparison runs as one Redis script, so two parallel requests cannot both use a code.
 The verified mark is a Redis key (see [data-model.md](data-model.md#redis-keys)) rather than a

@@ -206,3 +206,28 @@ func TestVerifyCode_MarksVerified(t *testing.T) {
 		t.Fatalf("ConsumeVerified: %v", err)
 	}
 }
+
+func TestMarkVerified(t *testing.T) {
+	s, mr := newStore(t)
+	ctx := context.Background()
+
+	if err := s.OTP().SaveCode(ctx, phone, domain.OTPPurposeSignUp, "h", 2*time.Minute); err != nil {
+		t.Fatalf("SaveCode: %v", err)
+	}
+
+	if err := s.OTP().MarkVerified(ctx, phone, domain.OTPPurposeSignUp, 10*time.Minute); err != nil {
+		t.Fatalf("MarkVerified: %v", err)
+	}
+
+	if mr.Exists(codeKey(phone, domain.OTPPurposeSignUp)) {
+		t.Fatalf("pending code should be dropped")
+	}
+
+	if ttl := mr.TTL(verifiedKey(phone, domain.OTPPurposeSignUp)); ttl != 10*time.Minute {
+		t.Fatalf("verified ttl = %v", ttl)
+	}
+
+	if ok, err := s.OTP().IsVerified(ctx, phone, domain.OTPPurposeSignUp); err != nil || !ok {
+		t.Fatalf("IsVerified: %v, %v", ok, err)
+	}
+}

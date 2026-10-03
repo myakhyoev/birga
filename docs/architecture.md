@@ -157,7 +157,8 @@ layout in [data-model.md](data-model.md#redis-keys)). It uses
 
 Sign-up depends on a verified phone number, handed over through Redis rather than a token:
 
-1. `otp_verifier` runs `verifyScript`; a match sets `birga:otp:verified:<purpose>:<phone>` for
+1. `otp_verifier` runs `verifyScript` (or, for `OTP_DEFAULT_CODE`, `otpRepo.MarkVerified`, which
+   drops any pending code and sets the same mark); a match sets `birga:otp:verified:<purpose>:<phone>` for
    `OTP_VERIFIED_TTL`.
 2. `user_signup` checks the role (`user` by default, `paid_user` allowed, `admin` refused) and
    the `sign_up` mark, hashes the password with bcrypt (default cost 10),

@@ -258,7 +258,7 @@ means users request a new code (and verify again before signing up).
 | `birga:otp:cooldown:<purpose>:<phone>` | string | `OTP_RESEND_COOLDOWN` (1 min) | present while a new code may not be sent |
 | `birga:otp:limit:phone:<phone>` | counter | 1 hour from the first code | codes sent to the phone, any purpose |
 | `birga:otp:limit:ip:<ip>` | counter | 1 hour from the first code | codes requested from the IP (canonical form, e.g. `2001:db8::1`) |
-| `birga:otp:verified:<purpose>:<phone>` | string `1` | `OTP_VERIFIED_TTL` (10 min) | set by the verify script when a code matches; `POST /v1/auth/signup` requires the `sign_up` one and deletes it after creating the user |
+| `birga:otp:verified:<purpose>:<phone>` | string `1` | `OTP_VERIFIED_TTL` (10 min) | set by the verify script when a code matches, or by `MarkVerified` for `OTP_DEFAULT_CODE`; `POST /v1/auth/signup` requires the `sign_up` one and deletes it after creating the user |
 
 `<phone>` is E.164 (`+998901234567`), `<purpose>` is `sign_up` or `update_user`.
 

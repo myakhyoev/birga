@@ -175,6 +175,26 @@ func (r *otpRepo) VerifyCode(
 	return domain.OTPVerifyOutcome(res[0]), int(res[1]), nil
 }
 
+// MarkVerified marks the phone verified for the purpose for verifiedTTL without checking a code,
+// and drops any pending code for it. Used for the default code (OTP_DEFAULT_CODE).
+func (r *otpRepo) MarkVerified(ctx context.Context, phone string, purpose domain.OTPPurpose, verifiedTTL time.Duration) error {
+	l := logger.FromCtx(ctx, "otpRepo.MarkVerified")
+
+	_, err := r.rdb.TxPipelined(ctx, func(p redis.Pipeliner) error {
+		p.Del(ctx, codeKey(phone, purpose))
+		p.Set(ctx, verifiedKey(phone, purpose), "1", verifiedTTL)
+
+		return nil
+	})
+	if err != nil {
+		l.Error("rdb.TxPipelined", zap.Error(err))
+
+		return errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return nil
+}
+
 // IsVerified reports whether a code for phone and purpose matched within OTP_VERIFIED_TTL and
 // the mark was not consumed yet.
 func (r *otpRepo) IsVerified(ctx context.Context, phone string, purpose domain.OTPPurpose) (bool, error) {
