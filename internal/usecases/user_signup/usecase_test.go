@@ -51,8 +51,8 @@ func (fn authRepoFunc) Create(_ context.Context, a domain.UserAuth) error { retu
 
 type fakeTokens struct{}
 
-func (fakeTokens) Issue(userID string, typ domain.TokenType) (string, error) {
-	return string(typ) + "." + userID, nil
+func (fakeTokens) Issue(userID string, role domain.UserRole, typ domain.TokenType) (string, error) {
+	return string(typ) + "." + userID + "." + string(role), nil
 }
 
 func (fakeTokens) AccessTTL() time.Duration { return 15 * time.Minute }
@@ -97,7 +97,7 @@ func TestExecute(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 
-	if pair.AccessToken != "access."+userID || pair.RefreshToken != "refresh."+userID || pair.AccessExpiresIn != 15*time.Minute {
+	if pair.AccessToken != "access."+userID+".user" || pair.RefreshToken != "refresh."+userID+".user" || pair.AccessExpiresIn != 15*time.Minute {
 		t.Fatalf("unexpected pair: %+v", pair)
 	}
 
@@ -105,7 +105,7 @@ func TestExecute(t *testing.T) {
 		t.Fatalf("unexpected user: %+v", f.user)
 	}
 
-	if f.auth.UserID != userID || f.auth.Username != "dilnoza_k" ||
+	if f.auth.UserID != userID || f.auth.Username != "dilnoza_k" || f.auth.Role != domain.UserRoleUser ||
 		f.auth.AccessTokenHash != domain.HashToken(pair.AccessToken) || f.auth.RefreshTokenHash != domain.HashToken(pair.RefreshToken) {
 		t.Fatalf("unexpected auth row: %+v", f.auth)
 	}
@@ -116,6 +116,25 @@ func TestExecute(t *testing.T) {
 
 	if !f.consumed {
 		t.Fatal("verification not consumed")
+	}
+}
+
+func TestExecute_Roles(t *testing.T) {
+	r := req()
+	r.Role = " paid_user "
+
+	f := &fakes{verified: true}
+
+	pair, err := newUseCase(f).Execute(context.Background(), r)
+	if err != nil || f.auth.Role != domain.UserRolePaidUser || pair.AccessToken != "access."+userID+".paid_user" {
+		t.Fatalf("paid_user: %+v %v, auth %+v", pair, err, f.auth)
+	}
+
+	r.Role = domain.UserRoleAdmin
+	f = &fakes{verified: true}
+
+	if _, err := newUseCase(f).Execute(context.Background(), r); !errors.Is(err, errs.ErrRoleNotSelfAssignable) || f.user.PhoneNumber != nil {
+		t.Fatalf("admin: %v", err)
 	}
 }
 
@@ -151,6 +170,7 @@ func TestExecute_Validation(t *testing.T) {
 		"short password": func(r *domain.SignUpRequest) { r.Password = "1234567" },
 		"long password":  func(r *domain.SignUpRequest) { r.Password = strings.Repeat("p", domain.MaxPasswordLength+1) },
 		"foreign phone":  func(r *domain.SignUpRequest) { r.PhoneNumber = "+77011234567" },
+		"unknown role":   func(r *domain.SignUpRequest) { r.Role = "owner" },
 	}
 
 	for name, mutate := range cases {

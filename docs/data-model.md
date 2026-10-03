@@ -77,7 +77,7 @@ rows with `deleted_at IS NULL` and maps violations of `users_username_uniq` and
 
 Authentication state for a user, one row per user. Created by
 `000002_create_users_tables`; `username` and `password` added by
-`000004_add_user_auth_credentials`. `POST /v1/auth/signup` inserts the row.
+`000004_add_user_auth_credentials`; `role` added by `000005_add_user_auth_role`. `POST /v1/auth/signup` inserts the row.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -86,6 +86,7 @@ Authentication state for a user, one row per user. Created by
 | `access_token` | `TEXT` | yes | | SHA-256 (hex) of the newest access token (`domain.HashToken`) |
 | `refresh_token` | `TEXT` | yes | | SHA-256 (hex) of the current refresh token; `POST /v1/auth/refresh` accepts only this one |
 | `username` | `TEXT` | yes | | sign-in username, same value as `users.username` (kept in sync by `users_sync_auth_username_trg`) |
+| `role` | `user_role` | no | `'user'` | enum `user`, `admin`, `paid_user`. Sign-up accepts `user` and `paid_user`; `admin` is set only in the database for now. Copied into the tokens' `role` claim |
 | `password` | `TEXT` | yes | | bcrypt hash (`$2a$10$...`) of the password; the plain password is never stored |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | not updated automatically |

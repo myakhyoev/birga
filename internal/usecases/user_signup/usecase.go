@@ -32,7 +32,7 @@ type txRunner interface {
 }
 
 type tokenIssuer interface {
-	Issue(userID string, typ domain.TokenType) (string, error)
+	Issue(userID string, role domain.UserRole, typ domain.TokenType) (string, error)
 	AccessTTL() time.Duration
 }
 
@@ -67,6 +67,11 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 	req.Name = strings.TrimSpace(req.Name)
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
+	req.Role = domain.UserRole(strings.TrimSpace(string(req.Role)))
+
+	if req.Role == "" {
+		req.Role = domain.UserRoleUser
+	}
 
 	if err := validate(req); err != nil {
 		return domain.TokenPair{}, err
@@ -94,7 +99,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			return err
 		}
 
-		if pair, err = uc.issue(user.ID); err != nil {
+		if pair, err = uc.issue(user.ID, req.Role); err != nil {
 			return err
 		}
 
@@ -102,6 +107,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			UserID:           user.ID,
 			Username:         req.Username,
 			PasswordHash:     string(hash),
+			Role:             req.Role,
 			AccessTokenHash:  domain.HashToken(pair.AccessToken),
 			RefreshTokenHash: domain.HashToken(pair.RefreshToken),
 		})
@@ -117,18 +123,18 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 		l.Error("verified.ConsumeVerified", zap.Error(err))
 	}
 
-	l.Info("user signed up")
+	l.Info("user signed up", zap.String("role", string(req.Role)))
 
 	return pair, nil
 }
 
-func (uc *UseCase) issue(userID string) (domain.TokenPair, error) {
-	access, err := uc.tokens.Issue(userID, domain.TokenTypeAccess)
+func (uc *UseCase) issue(userID string, role domain.UserRole) (domain.TokenPair, error) {
+	access, err := uc.tokens.Issue(userID, role, domain.TokenTypeAccess)
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
 
-	refresh, err := uc.tokens.Issue(userID, domain.TokenTypeRefresh)
+	refresh, err := uc.tokens.Issue(userID, role, domain.TokenTypeRefresh)
 	if err != nil {
 		return domain.TokenPair{}, err
 	}
@@ -148,6 +154,10 @@ func validate(req domain.SignUpRequest) error {
 		return errs.Errf(errs.ErrValidation, "password must be %d to %d bytes long", domain.MinPasswordLength, domain.MaxPasswordLength)
 	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
 		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+	case !req.Role.IsKnown():
+		return errs.Errf(errs.ErrValidation, "user_role must be %q or %q", domain.UserRoleUser, domain.UserRolePaidUser)
+	case !req.Role.IsSelfAssignable():
+		return errs.ErrRoleNotSelfAssignable
 	}
 
 	return nil

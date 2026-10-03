@@ -14,8 +14,8 @@ const userID = "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
 
 type fakeTokens struct{}
 
-func (fakeTokens) Issue(userID string, typ domain.TokenType) (string, error) {
-	return "new-" + string(typ) + "." + userID, nil
+func (fakeTokens) Issue(userID string, role domain.UserRole, typ domain.TokenType) (string, error) {
+	return "new-" + string(typ) + "." + userID + "." + string(role), nil
 }
 
 func (fakeTokens) Parse(token string, want domain.TokenType) (domain.TokenClaims, error) {
@@ -43,14 +43,14 @@ func (f *fakeAuth) SetAccessToken(_ context.Context, _ string, hash string) erro
 }
 
 func TestExecute(t *testing.T) {
-	auth := &fakeAuth{row: domain.UserAuth{UserID: userID, RefreshTokenHash: domain.HashToken("good-refresh")}}
+	auth := &fakeAuth{row: domain.UserAuth{UserID: userID, Role: domain.UserRolePaidUser, RefreshTokenHash: domain.HashToken("good-refresh")}}
 
 	got, err := New(nil, fakeTokens{}, auth).Execute(context.Background(), " good-refresh ")
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 
-	want := "new-access." + userID
+	want := "new-access." + userID + ".paid_user"
 	if got.Token != want || got.ExpiresIn != 15*time.Minute || auth.savedHash != domain.HashToken(want) {
 		t.Fatalf("got %+v, saved %q", got, auth.savedHash)
 	}

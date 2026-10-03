@@ -190,6 +190,14 @@ definitions:
       phone_number:
         example: "+998901234567"
         type: string
+      user_role:
+        description: UserRole is optional and defaults to user; admin is refused with
+          403.
+        enum:
+        - user
+        - paid_user
+        example: user
+        type: string
       username:
         example: dilnoza_k
         type: string
@@ -1017,6 +1025,8 @@ paths:
         used up by a successful sign-up. Not verified: 403
         - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
         password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
+        - user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),
+        anything else is 422. Stored in user_auth.role and written into the tokens as the role claim
         - username or phone number already used: 409
         - access_token (JWT_ACCESS_TTL, default 15 minutes) and refresh_token (JWT_REFRESH_TTL,
         default 30 days) are HS256 JWTs; send the access token as Authorization: Bearer <token>

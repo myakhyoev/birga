@@ -1,0 +1,3 @@
+ALTER TABLE user_auth DROP COLUMN IF EXISTS role;
+
+DROP TYPE IF EXISTS user_role;

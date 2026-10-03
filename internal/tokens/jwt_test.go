@@ -35,10 +35,10 @@ func TestIssueParse(t *testing.T) {
 	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
 	iss.now = func() time.Time { return now }
 
-	access, _ := iss.Issue(userID, domain.TokenTypeAccess)
-	refresh, _ := iss.Issue(userID, domain.TokenTypeRefresh)
+	access, _ := iss.Issue(userID, domain.UserRolePaidUser, domain.TokenTypeAccess)
+	refresh, _ := iss.Issue(userID, domain.UserRolePaidUser, domain.TokenTypeRefresh)
 
-	if c, err := iss.Parse(refresh, domain.TokenTypeRefresh); err != nil || c.UserID != userID {
+	if c, err := iss.Parse(refresh, domain.TokenTypeRefresh); err != nil || c.UserID != userID || c.Role != domain.UserRolePaidUser {
 		t.Fatalf("refresh: %+v %v", c, err)
 	}
 

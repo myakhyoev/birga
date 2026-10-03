@@ -26,7 +26,7 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; invalid, expired or revoked refresh token |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured); sign-up without a verified phone number |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured); sign-up without a verified phone number or with `user_role: admin` |
 | -30 | 404 | not found | unknown id, unpublished activity on a public endpoint, soft-deleted user, OTP expired or not requested |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
@@ -243,7 +243,8 @@ Sign-up and access token refresh. Tokens are HS256 JWTs signed with `JWT_SECRET`
 | POST | `/v1/auth/signup` | create a user whose phone number was verified, return access and refresh tokens |
 | POST | `/v1/auth/refresh` | trade a refresh token for a new access token |
 
-Token claims: `sub` is the user id, `typ` is `access` or `refresh`, plus `iss`
+Token claims: `sub` is the user id, `typ` is `access` or `refresh`, `role` is the user's
+`user_auth.role` when the token was issued (`user`, `admin` or `paid_user`), plus `iss`
 (`JWT_ISSUER`), `iat`, `exp` and a unique `jti`. An access token lives `JWT_ACCESS_TTL`
 (15 min), a refresh token `JWT_REFRESH_TTL` (30 days). A token of one type is rejected where
 the other is expected. No endpoint checks access tokens yet; when one does, the client will
@@ -255,7 +256,7 @@ Flow: `POST /v1/otp/send` and `POST /v1/otp/verify` with `purpose: sign_up`, the
 `OTP_VERIFIED_TTL` (10 min):
 
 ```json
-{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567"}
+{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567", "user_role": "user"}
 ```
 
 | Field | Rules |
@@ -264,6 +265,7 @@ Flow: `POST /v1/otp/send` and `POST /v1/otp/verify` with `purpose: sign_up`, the
 | `username` | 3 to 32 of `a-z`, `0-9`, `_`, `.`; trimmed and lowercased |
 | `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
 | `phone_number` | Uzbek number, `+998` and 9 digits; must be the verified one |
+| `user_role` | optional: `user` (default) or `paid_user`. `admin` is refused with 403 so nobody can make themselves an admin; any other value is 422 |
 
 Response `data`:
 
@@ -279,9 +281,10 @@ Behaviour (`usecases/user_signup`):
 |---|---:|---:|---|
 | invalid field | 422 | -10 | which field and why |
 | no `sign_up` verification for the phone (never verified, expired, or already used by a sign-up) | 403 | -21 | `phone number is not verified, verify a sign_up code with /v1/otp/verify first` |
+| `user_role` is `admin` | 403 | -21 | `user_role admin cannot be chosen at sign-up` |
 | username or phone number belongs to an active user | 409 | -40 | `username is already taken` / `phone number is already taken` |
 
-- The `users` row (name, username, phone) and the `user_auth` row (username, bcrypt password,
+- The `users` row (name, username, phone) and the `user_auth` row (username, bcrypt password, role,
   SHA-256 hashes of both tokens) are written in one transaction.
 - The verified mark is deleted only after the user is stored, so a sign-up that fails (for
   example a taken username) can be retried with another username without a new code.
@@ -297,7 +300,8 @@ Response `data`: `{"access_token": "eyJ...", "expires_in": 900}`.
 The refresh token must be signed with `JWT_SECRET`, unexpired, of type `refresh`, and its
 SHA-256 must equal `user_auth.refresh_token` for the user in `sub`. Anything else, including a
 soft-deleted user (their `user_auth` row is gone), is 401 (-20) `refresh token is invalid or
-expired, sign in again`. The new access token's hash replaces `user_auth.access_token`. The
+expired, sign in again`. The new access token's hash replaces `user_auth.access_token`; its `role` claim is read from
+`user_auth.role` at refresh time, so a changed role shows up in the next access token. The
 refresh token is not rotated; the client keeps it until it expires.
 
 ```bash
