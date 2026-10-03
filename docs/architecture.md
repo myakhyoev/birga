@@ -42,7 +42,7 @@ testable with small fakes.
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
 | `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `TokenClaims`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
-| `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Activity()`, `Media()`) and the transaction helper |
+| `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Child()` for `children` and `user_children`, `Activity()`, `Media()`) and the transaction helper |
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
 | `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
@@ -116,17 +116,23 @@ The full mapping table is in [api.md](api.md#errors).
 
 ## Database access
 
-- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`, `store.Auth()`, `store.Media()`).
+- Repositories hang off `DBStore` (`store.Activity()`, `store.User()`, `store.Auth()`, `store.Media()`, `store.Child()`).
 - `DBStore.InTx(ctx, fn)` runs `fn` in a read-committed transaction. Repository calls made
   with the `ctx` that `fn` receives join the transaction automatically
   (`sqlClientByCtx` picks the `pgx.Tx` from the context, or the pool otherwise).
 - Queries use positional parameters only; dynamic filters and partial updates build the
-  `WHERE` / `SET` clause from fixed fragments (`activityWhere`, `userSet`), so values never
+  `WHERE` / `SET` clause from fixed fragments (`activityWhere`, `userSet`, `childFrom`, `childSet`), so values never
   enter the SQL text.
-- Soft-deletable tables (`users`) are filtered with `deleted_at IS NULL` in every
+- Soft-deletable tables (`users`, `children`) are filtered with `deleted_at IS NULL` in every
   repository query, and delete is an `UPDATE ... SET deleted_at = NOW()`.
 - A unique-index violation (`23505`) is mapped to a specific `errs.ErrConflict` error by
-  constraint name (`userConflict`), which the gateway turns into a 409.
+  constraint name (`userConflict`), which the gateway turns into a 409. A failed `CHECK`
+  (`23514`) on `children` becomes `errs.ErrValidation`.
+- Many-to-many links (`user_children`) are plain rows with a composite primary key and no
+  `deleted_at`. `childRepo.AddParent` checks that both sides are active in the same statement
+  and ignores an existing link (`ON CONFLICT DO NOTHING`); reads join through active rows
+  only, so a soft-deleted user or child disappears from the other side without touching the
+  links.
 - Rows scan into `db*` structs with `db:"..."` tags and convert to domain types with
   `toDomain()`.
 
