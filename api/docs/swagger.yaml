@@ -217,6 +217,21 @@ definitions:
         example: dilnoza_95
         type: string
     type: object
+  rest.VerifyOTPRequest:
+    properties:
+      code:
+        example: "480569"
+        type: string
+      phone_number:
+        example: "+998901234567"
+        type: string
+      purpose:
+        enum:
+        - sign_up
+        - update_user
+        example: sign_up
+        type: string
+    type: object
   rest.activityListView:
     properties:
       items:
@@ -879,8 +894,10 @@ paths:
         - purpose: sign_up (the number must not belong to a user, 409 otherwise) or update_user
         - ip_address: the end user's IPv4 or IPv6 address, used for rate limits
         - the code has 6 digits and is sent through Play Mobile; only its hash is stored
-        - limits (429): one code per phone and purpose per resend_in seconds, and per hour at most
-        OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP
+        - the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new
+        code replaces the previous one for the same phone and purpose
+        - rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour
+        at most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP
       parameters:
       - description: where and why to send the code
         in: body
@@ -921,6 +938,53 @@ paths:
           schema:
             $ref: '#/definitions/rest.InternalServerErrorResponse'
       summary: sends a one-time code by SMS
+      tags:
+      - otp
+  /v1/otp/verify:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - phone_number and purpose must be the ones the code was sent for; code is 6 digits (422)
+        - a matching code is deleted, so it works only once; data is null
+        - wrong code: 422 with the attempts left; after OTP_MAX_VERIFY_ATTEMPTS wrong codes the
+        code is deleted and the answer is 429
+        - no code (never sent, expired after 2 minutes, or already used): 404
+      parameters:
+      - description: code to check
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.VerifyOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/rest.TooManyRequestsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      summary: checks a one-time code
       tags:
       - otp
 securityDefinitions:

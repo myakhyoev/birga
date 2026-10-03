@@ -18,27 +18,20 @@ const (
 // OTPCodeLength is the number of digits in a one-time code.
 const OTPCodeLength = 6
 
-// uzPhoneRegex: an Uzbek mobile number in E.164, +998 and 9 digits. The SMS provider only delivers in Uzbekistan.
-var uzPhoneRegex = regexp.MustCompile(`^\+998[0-9]{9}$`)
+var (
+	// uzPhoneRegex: an Uzbek mobile number in E.164, +998 and 9 digits. The SMS provider only delivers in Uzbekistan.
+	uzPhoneRegex = regexp.MustCompile(`^\+998[0-9]{9}$`)
+	// otpCodeRegex: exactly OTPCodeLength digits.
+	otpCodeRegex = regexp.MustCompile(`^[0-9]{6}$`)
+)
 
 // IsKnown reports whether p is one of the supported purposes.
 func (p OTPPurpose) IsKnown() bool {
 	return p == OTPPurposeSignUp || p == OTPPurposeUpdateUser
 }
 
-// OTP is one code sent by SMS. Only the hash of the code is stored.
-type OTP struct {
-	ID          string
-	PhoneNumber string
-	Purpose     OTPPurpose
-	CodeHash    string
-	IPAddress   string
-	ExpiresAt   time.Time
-	CreatedAt   time.Time
-}
-
 // OTPSendRequest asks for a code to be sent to PhoneNumber. IPAddress is the end user's IP,
-// used for rate limiting and audit.
+// used for rate limiting.
 type OTPSendRequest struct {
 	PhoneNumber string
 	Purpose     OTPPurpose
@@ -51,18 +44,35 @@ type OTPSendResult struct {
 	ResendIn  time.Duration
 }
 
-// OTPSendStats is what the rate limits of the send-OTP endpoint look at.
-type OTPSendStats struct {
-	// LastSentAt is when the latest code for this phone and purpose was created; nil if never.
-	LastSentAt *time.Time
-	// PhoneCount and IPCount are the codes created since the window start for the phone (any purpose) and the IP.
-	PhoneCount int
-	IPCount    int
+// OTPVerifyRequest checks Code against the code last sent to PhoneNumber for Purpose.
+type OTPVerifyRequest struct {
+	PhoneNumber string
+	Purpose     OTPPurpose
+	Code        string
 }
 
-// HashOTPCode returns the stored form of code. The OTP id salts the hash, so equal codes hash differently.
-func HashOTPCode(otpID, code string) string {
-	sum := sha256.Sum256([]byte(otpID + ":" + code))
+// OTPLimits are the send limits the rate limiter enforces.
+type OTPLimits struct {
+	ResendCooldown time.Duration // one code per phone and purpose per cooldown
+	Window         time.Duration // window of the counters below
+	MaxPerPhone    int           // codes per phone (any purpose) per window
+	MaxPerIP       int           // codes per IP per window
+}
+
+// OTPVerifyOutcome is the result of comparing a code with the stored one.
+type OTPVerifyOutcome int
+
+const (
+	OTPMatched      OTPVerifyOutcome = iota // code matched; the stored code is deleted
+	OTPMismatch                             // wrong code; attempts left
+	OTPNotFound                             // no code: never sent, expired or already used
+	OTPTooManyTries                         // wrong code and no attempts left; the stored code is deleted
+)
+
+// HashOTPCode returns the stored form of a code. Phone and purpose salt the hash, so the plain
+// code never reaches the store.
+func HashOTPCode(phone string, purpose OTPPurpose, code string) string {
+	sum := sha256.Sum256([]byte(phone + ":" + string(purpose) + ":" + code))
 
 	return hex.EncodeToString(sum[:])
 }
@@ -70,4 +80,9 @@ func HashOTPCode(otpID, code string) string {
 // IsUzbekPhoneNumber reports whether phone is an Uzbek number in E.164 (+998XXXXXXXXX).
 func IsUzbekPhoneNumber(phone string) bool {
 	return uzPhoneRegex.MatchString(phone)
+}
+
+// IsValidOTPCode reports whether code has the one-time code format.
+func IsValidOTPCode(code string) bool {
+	return otpCodeRegex.MatchString(code)
 }

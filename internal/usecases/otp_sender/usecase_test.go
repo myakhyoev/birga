@@ -13,43 +13,33 @@ import (
 )
 
 var (
-	testNow = time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
-	testCfg = config.OTPConfig{TTL: 3 * time.Minute, ResendCooldown: time.Minute, MaxPerPhoneHour: 5, MaxPerIPHour: 20}
+	testCfg = config.OTPConfig{TTL: 2 * time.Minute, ResendCooldown: time.Minute, MaxPerPhoneHour: 5, MaxPerIPHour: 20}
 	codeRe  = regexp.MustCompile(`\b(\d{6})\b`)
 )
 
-type fakeTx struct{}
-
-func (fakeTx) InTx(ctx context.Context, h func(context.Context) error) error { return h(ctx) }
-
 type fakeOTPs struct {
-	stats   domain.OTPSendStats
-	since   time.Time
-	locked  string
-	created *domain.OTP
-	deleted string
+	acquireErr error
+	limits     domain.OTPLimits
+	ip         string
+	hash       string
+	ttl        time.Duration
+	released   bool
 }
 
-func (f *fakeOTPs) LockPhone(_ context.Context, phone string) error {
-	f.locked = phone
+func (f *fakeOTPs) AcquireSend(_ context.Context, _ string, _ domain.OTPPurpose, ip string, lim domain.OTPLimits) error {
+	f.ip, f.limits = ip, lim
+
+	return f.acquireErr
+}
+
+func (f *fakeOTPs) ReleaseSend(context.Context, string, domain.OTPPurpose, string) error {
+	f.released = true
 
 	return nil
 }
 
-func (f *fakeOTPs) SendStats(_ context.Context, _ string, _ domain.OTPPurpose, _ string, since time.Time) (domain.OTPSendStats, error) {
-	f.since = since
-
-	return f.stats, nil
-}
-
-func (f *fakeOTPs) Create(_ context.Context, o domain.OTP) (domain.OTP, error) {
-	f.created = &o
-
-	return o, nil
-}
-
-func (f *fakeOTPs) Delete(_ context.Context, id string) error {
-	f.deleted = id
+func (f *fakeOTPs) SaveCode(_ context.Context, _ string, _ domain.OTPPurpose, hash string, ttl time.Duration) error {
+	f.hash, f.ttl = hash, ttl
 
 	return nil
 }
@@ -69,21 +59,14 @@ func (f *fakeSMS) Send(_ context.Context, id, phone, text string) error {
 	return f.err
 }
 
-func newUC(otps *fakeOTPs, users fakeUsers, sms *fakeSMS) *UseCase {
-	uc := New(nil, testCfg, fakeTx{}, otps, users, sms)
-	uc.now = func() time.Time { return testNow }
-
-	return uc
-}
-
 func validReq() domain.OTPSendRequest {
-	return domain.OTPSendRequest{PhoneNumber: " +998901234567 ", Purpose: domain.OTPPurposeSignUp, IPAddress: "203.0.113.7"}
+	return domain.OTPSendRequest{PhoneNumber: " +998901234567 ", Purpose: domain.OTPPurposeSignUp, IPAddress: " 2001:DB8::1 "}
 }
 
 func TestExecute_Sends(t *testing.T) {
 	otps, sms := &fakeOTPs{}, &fakeSMS{}
 
-	res, err := newUC(otps, fakeUsers{}, sms).Execute(context.Background(), validReq())
+	res, err := New(nil, testCfg, otps, fakeUsers{}, sms).Execute(context.Background(), validReq())
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -92,18 +75,17 @@ func TestExecute_Sends(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 
-	o := otps.created
-	if o == nil || otps.locked != "+998901234567" || o.PhoneNumber != "+998901234567" || o.IPAddress != "203.0.113.7" ||
-		!o.ExpiresAt.Equal(testNow.Add(testCfg.TTL)) || !o.CreatedAt.Equal(testNow) || !otps.since.Equal(testNow.Add(-time.Hour)) {
-		t.Fatalf("unexpected stored otp: %+v (locked %q, since %v)", o, otps.locked, otps.since)
+	wantLimits := domain.OTPLimits{ResendCooldown: time.Minute, Window: time.Hour, MaxPerPhone: 5, MaxPerIP: 20}
+	if otps.limits != wantLimits || otps.ip != "2001:db8::1" || otps.ttl != testCfg.TTL || otps.released {
+		t.Fatalf("unexpected store calls: %+v", otps)
 	}
 
 	m := codeRe.FindStringSubmatch(sms.text)
-	if m == nil || sms.id != o.ID || sms.phone != o.PhoneNumber {
+	if m == nil || sms.id == "" || sms.phone != "+998901234567" {
 		t.Fatalf("unexpected sms: %+v", sms)
 	}
 
-	if o.CodeHash != domain.HashOTPCode(o.ID, m[1]) {
+	if otps.hash != domain.HashOTPCode("+998901234567", domain.OTPPurposeSignUp, m[1]) {
 		t.Fatalf("stored hash does not match the sent code")
 	}
 }
@@ -124,14 +106,14 @@ func TestExecute_Validation(t *testing.T) {
 		req := validReq()
 		mutate(&req)
 
-		if _, err := newUC(&fakeOTPs{}, fakeUsers{}, &fakeSMS{}).Execute(context.Background(), req); !errors.Is(err, errs.ErrValidation) {
+		if _, err := New(nil, testCfg, &fakeOTPs{}, fakeUsers{}, &fakeSMS{}).Execute(context.Background(), req); !errors.Is(err, errs.ErrValidation) {
 			t.Fatalf("%s: expected validation error, got %v", name, err)
 		}
 	}
 }
 
 func TestExecute_SignUpPhoneRegistered(t *testing.T) {
-	_, err := newUC(&fakeOTPs{}, fakeUsers{exists: true}, &fakeSMS{}).Execute(context.Background(), validReq())
+	_, err := New(nil, testCfg, &fakeOTPs{}, fakeUsers{exists: true}, &fakeSMS{}).Execute(context.Background(), validReq())
 	if !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("expected conflict, got %v", err)
 	}
@@ -140,52 +122,33 @@ func TestExecute_SignUpPhoneRegistered(t *testing.T) {
 	req := validReq()
 	req.Purpose = domain.OTPPurposeUpdateUser
 
-	if _, err := newUC(&fakeOTPs{}, fakeUsers{exists: true}, &fakeSMS{}).Execute(context.Background(), req); err != nil {
+	if _, err := New(nil, testCfg, &fakeOTPs{}, fakeUsers{exists: true}, &fakeSMS{}).Execute(context.Background(), req); err != nil {
 		t.Fatalf("update_user: %v", err)
 	}
 }
 
-func TestExecute_RateLimits(t *testing.T) {
-	recent, old := testNow.Add(-20*time.Second), testNow.Add(-2*time.Minute)
+func TestExecute_RateLimited(t *testing.T) {
+	otps, sms := &fakeOTPs{acquireErr: errs.Errf(errs.ErrRateLimited, "wait")}, &fakeSMS{}
 
-	cases := map[string]domain.OTPSendStats{
-		"cooldown":    {LastSentAt: &recent},
-		"phone limit": {LastSentAt: &old, PhoneCount: 5},
-		"ip limit":    {IPCount: 20},
-	}
-
-	for name, st := range cases {
-		otps, sms := &fakeOTPs{stats: st}, &fakeSMS{}
-
-		_, err := newUC(otps, fakeUsers{}, sms).Execute(context.Background(), validReq())
-		if name == "cooldown" && (err == nil || err.Error() != "a code was sent recently, request a new one in 40 seconds") {
-			t.Fatalf("cooldown message: %v", err)
-		}
-
-		if !errors.Is(err, errs.ErrRateLimited) || otps.created != nil || sms.text != "" {
-			t.Fatalf("%s: expected rate limit and nothing sent, got %v", name, err)
-		}
-	}
-
-	otps := &fakeOTPs{stats: domain.OTPSendStats{LastSentAt: &old, PhoneCount: 4, IPCount: 19}}
-	if _, err := newUC(otps, fakeUsers{}, &fakeSMS{}).Execute(context.Background(), validReq()); err != nil {
-		t.Fatalf("under limits: %v", err)
+	_, err := New(nil, testCfg, otps, fakeUsers{}, sms).Execute(context.Background(), validReq())
+	if !errors.Is(err, errs.ErrRateLimited) || otps.hash != "" || sms.text != "" || otps.released {
+		t.Fatalf("expected rate limit and nothing stored or sent, got %v", err)
 	}
 }
 
-func TestExecute_SendFailureRemovesCode(t *testing.T) {
+func TestExecute_SendFailureReleases(t *testing.T) {
 	otps, sms := &fakeOTPs{}, &fakeSMS{err: errs.Errf(errs.ErrConnection, "down")}
 
-	_, err := newUC(otps, fakeUsers{}, sms).Execute(context.Background(), validReq())
-	if !errors.Is(err, errs.ErrConnection) || otps.deleted == "" || otps.deleted != otps.created.ID {
-		t.Fatalf("expected connection error and deleted code, got %v (deleted %q)", err, otps.deleted)
+	_, err := New(nil, testCfg, otps, fakeUsers{}, sms).Execute(context.Background(), validReq())
+	if !errors.Is(err, errs.ErrConnection) || !otps.released {
+		t.Fatalf("expected connection error and released send, got %v (released %v)", err, otps.released)
 	}
 }
 
 func TestGenerateCode(t *testing.T) {
 	for range 100 {
 		c, err := generateCode()
-		if err != nil || len(c) != domain.OTPCodeLength || !codeRe.MatchString(c) {
+		if err != nil || !domain.IsValidOTPCode(c) {
 			t.Fatalf("bad code %q: %v", c, err)
 		}
 	}

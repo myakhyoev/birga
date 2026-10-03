@@ -18,6 +18,7 @@ func (s *Server) endpoints() {
 		v1.GET("/activities/:id", s.GetActivity())
 
 		v1.POST("/otp/send", s.SendOTP())
+		v1.POST("/otp/verify", s.VerifyOTP())
 	}
 
 	admin := v1.Group("/admin", s.adminAuth())

@@ -801,7 +801,7 @@ const docTemplate = `{
         },
         "/v1/otp/send": {
             "post": {
-                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise) or update_user\n- ip_address: the end user's IPv4 or IPv6 address, used for rate limits\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- limits (429): one code per phone and purpose per resend_in seconds, and per hour at most\nOTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP",
+                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise) or update_user\n- ip_address: the end user's IPv4 or IPv6 address, used for rate limits\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP",
                 "consumes": [
                     "application/json"
                 ],
@@ -852,6 +852,70 @@ const docTemplate = `{
                         "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "$ref": "#/definitions/rest.TooManyRequestsResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/otp/verify": {
+            "post": {
+                "description": "- phone_number and purpose must be the ones the code was sent for; code is 6 digits (422)\n- a matching code is deleted, so it works only once; data is null\n- wrong code: 422 with the attempts left; after OTP_MAX_VERIFY_ATTEMPTS wrong codes the\ncode is deleted and the answer is 429\n- no code (never sent, expired after 2 minutes, or already used): 404",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "otp"
+                ],
+                "summary": "checks a one-time code",
+                "parameters": [
+                    {
+                        "description": "code to check",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.VerifyOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "422": {
@@ -1214,6 +1278,27 @@ const docTemplate = `{
                 "username": {
                     "type": "string",
                     "example": "dilnoza_95"
+                }
+            }
+        },
+        "rest.VerifyOTPRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "480569"
+                },
+                "phone_number": {
+                    "type": "string",
+                    "example": "+998901234567"
+                },
+                "purpose": {
+                    "type": "string",
+                    "enum": [
+                        "sign_up",
+                        "update_user"
+                    ],
+                    "example": "sign_up"
                 }
             }
         },

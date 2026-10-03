@@ -18,11 +18,11 @@ middle, transport and storage at the edges.
    │ usecases/<action>          │  one package per business action, validation
    └──────┬───────────────┬─────┘
           │               │ interfaces declared by each use case
-   ┌──────▼─────┐   ┌─────▼──────┐
-   │ dbstore    │   │ drivers    │  PostgreSQL repositories / external services
-   └──────┬─────┘   └─────┬──────┘
-          ▼               ▼
-      PostgreSQL     Play Mobile (SMS), ...
+   ┌──────▼──────────────┐   ┌─────▼──────┐
+   │ dbstore, redisstore │   │ drivers    │  storage / external services
+   └──────┬──────────────┘   └─────┬──────┘
+          ▼                        ▼
+   PostgreSQL, Redis          Play Mobile (SMS), ...
 
    domain/  plain types shared by every layer (no dependencies)
    errs/    application errors, mapped to HTTP codes by the gateway
@@ -40,11 +40,12 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTP`, `OTPPurpose`, `OTPSendRequest`), constants and format checks (goals, age range, username, phone, Uzbek phone), OTP hashing |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP hashing |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
 | `internal/dbstore/` | PostgreSQL repositories and the transaction helper |
+| `internal/redisstore/` | Redis state: one-time codes and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender` |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -63,7 +64,8 @@ resource that needs closing:
 1. Logger (`pkg/logger`), JSON on stdout, installed as zap's global logger.
 2. PostgreSQL pool (`pgxpool`) with the metrics tracer; the process exits if the database
    cannot be pinged within `POSTGRES_CONNECT_TIMEOUT`.
-3. `dbstore.New(pool)`.
+3. `dbstore.New(pool)`, then the Redis client (`REDIS_URL`); the process exits if Redis cannot
+   be pinged within `REDIS_CONNECT_TIMEOUT`. `redisstore.New(rdb)`.
 4. Drivers: the SMS sender chosen by `SMS_PROVIDER` (`playmobile` or `log`). Startup fails on
    an unknown provider, on `playmobile` without credentials, and on `log` in production.
 5. Use cases.
@@ -71,7 +73,8 @@ resource that needs closing:
 
 `App.Run` starts the metrics server on `METRICS_PORT` and the API on `HTTP_PORT`, then waits
 for a signal or a server error. Teardown runs in reverse order: the HTTP server gets 10 seconds
-to finish in-flight requests, then the DB pool closes, then the logger flushes.
+to finish in-flight requests, then the Redis client and the DB pool close, then the logger
+flushes. `/health` pings both PostgreSQL and Redis (`bootstrap.healthCheck`).
 
 ## Request flow
 
@@ -93,7 +96,7 @@ writes the response envelope.
 
 `rest.New` takes each activity use case as its own argument; the user use cases come grouped
 in `rest.UserUseCases` (creator, lister, getter, updater, deleter) and the OTP ones in
-`rest.OTPUseCases` (sender). Group the use cases of
+`rest.OTPUseCases` (sender, verifier). Group the use cases of
 new resources the same way rather than growing the argument list.
 
 ## Errors
@@ -122,11 +125,22 @@ The full mapping table is in [api.md](api.md#errors).
   repository query, and delete is an `UPDATE ... SET deleted_at = NOW()`.
 - A unique-index violation (`23505`) is mapped to a specific `errs.ErrConflict` error by
   constraint name (`userConflict`), which the gateway turns into a 409.
-- Check-then-insert logic that must not race (OTP rate limits) runs inside `InTx` after a
-  transaction-scoped advisory lock on the natural key (`otpRepo.LockPhone`). Use cases that
-  need a transaction declare a small `txRunner` interface that `DBStore` satisfies.
 - Rows scan into `db*` structs with `db:"..."` tags and convert to domain types with
   `toDomain()`.
+
+## Redis
+
+`internal/redisstore` holds state that expires: one-time codes and rate-limit counters (key
+layout in [data-model.md](data-model.md#redis-keys)). It uses
+[go-redis](https://github.com/redis/go-redis) v9.
+
+- Logic that must not race runs as a Lua script (`redis.NewScript`), which Redis executes
+  atomically: `acquireScript` checks the cooldown and both hourly counters and only then counts
+  the send; `verifyScript` compares the hash and deletes the code on a match, or counts the
+  attempt and deletes the code after the last one. Several API instances can share one Redis.
+- Scripts return small integer tuples; the Go side maps them to `errs` values
+  (`ErrRateLimited` with the wait in seconds) or `domain.OTPVerifyOutcome`.
+- Use cases declare the methods they need (`otpStore`), exactly as with `dbstore`.
 
 ## Drivers
 
@@ -136,7 +150,7 @@ provider failures to `errs` values (4xx to `ErrBadRequest`, transport failures t
 `ErrConnection`).
 
 SMS drivers implement `Send(ctx, messageID, phone, text) error`; the use case passes its own
-message id (the OTP row id).
+message id (a fresh UUID per send).
 
 - `internal/drivers/playmobile` calls Play Mobile (smsxabar.uz): `POST
   <PLAYMOBILE_BASE_URL>/broker-api/send` with HTTP Basic auth and

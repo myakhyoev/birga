@@ -123,3 +123,32 @@ func TestUserRepo_SoftDelete(t *testing.T) {
 		}
 	})
 }
+
+func TestUserRepo_ExistsByPhone(t *testing.T) {
+	s := newTestStore(t)
+
+	inRollbackTx(t, s, func(ctx context.Context) {
+		const phone = "+998900000102"
+
+		if ok, err := s.User().ExistsByPhone(ctx, phone); err != nil || ok {
+			t.Fatalf("before create: %v, %v", ok, err)
+		}
+
+		u, err := s.User().Create(ctx, domain.User{PhoneNumber: strPtr(phone)})
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+
+		if ok, err := s.User().ExistsByPhone(ctx, phone); err != nil || !ok {
+			t.Fatalf("after create: %v, %v", ok, err)
+		}
+
+		if err := s.User().Delete(ctx, u.ID); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+
+		if ok, err := s.User().ExistsByPhone(ctx, phone); err != nil || ok {
+			t.Fatalf("after delete: %v, %v", ok, err)
+		}
+	})
+}

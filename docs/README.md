@@ -7,8 +7,8 @@ and Russian.
 
 This repository is the Go API behind the app. Today it serves the activity catalogue and a
 small admin API for managing activities and users (create, read, update, soft delete), and
-sends one-time SMS codes through Play Mobile for sign-up and account changes. Verifying those
-codes, child profiles and completions are the next features.
+sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for sign-up and
+account changes. Child profiles and completions are the next features.
 
 ## Start here
 
@@ -17,7 +17,7 @@ codes, child profiles and completions are the next features.
 | [setup.md](setup.md) | run the API and database on your machine, configure it, run tests |
 | [architecture.md](architecture.md) | understand the layers, how a request flows, and how to add a feature |
 | [api.md](api.md) | call the API: envelope, error codes, endpoints, admin auth |
-| [data-model.md](data-model.md) | see the database tables, constraints and migrations |
+| [data-model.md](data-model.md) | see the database tables, constraints, migrations and Redis keys |
 | [operations.md](operations.md) | build, deploy, monitor and back up the service |
 
 The generated OpenAPI spec lives in `api/docs/` and is served at `/swagger/index.html`

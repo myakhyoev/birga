@@ -66,7 +66,11 @@ fire on API down, 5xx above 5%, p95 above 1s, DB pool and connection pressure, d
 and container restarts, and go to Telegram when a bot token and chat id are configured.
 
 **Probes.** `GET /ping` for liveness, `GET /health` for readiness (fails with 503 when the
-database is unreachable).
+database or Redis is unreachable).
+
+**Redis.** The API needs Redis (`REDIS_URL`) for one-time codes and rate limits. The backend
+`docker-compose.yml` runs one; the devops stack does not include it yet, so add a Redis
+service there (no persistence or backups needed) before deploying this version.
 
 ## Backups
 

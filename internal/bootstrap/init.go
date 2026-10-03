@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	"gitlab.com/loyihalar/birga/backend/internal/config"
@@ -13,10 +14,12 @@ import (
 	"gitlab.com/loyihalar/birga/backend/internal/drivers/playmobile"
 	"gitlab.com/loyihalar/birga/backend/internal/drivers/smslog"
 	"gitlab.com/loyihalar/birga/backend/internal/gateways/rest"
+	"gitlab.com/loyihalar/birga/backend/internal/redisstore"
 	activitycreator "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_creator"
 	activitygetter "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_getter"
 	activitylister "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_lister"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
+	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
 	usercreator "gitlab.com/loyihalar/birga/backend/internal/usecases/user_creator"
 	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
 	usergetter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_getter"
@@ -59,6 +62,49 @@ func initDB(l *zap.Logger, cfg *config.DB) (*pgxpool.Pool, func()) {
 		l.Info("Database pool closing...")
 		pool.Close()
 	}
+}
+
+func initRedis(l *zap.Logger, cfg *config.RedisConfig) (*redis.Client, func()) {
+	opts, err := redis.ParseURL(cfg.URL)
+	if err != nil {
+		l.Fatal("redis.ParseURL", zap.Error(err))
+	}
+
+	rdb := redis.NewClient(opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ConnectTimeout)
+	defer cancel()
+
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		l.Fatal("Failed to ping Redis", zap.Error(err))
+	}
+
+	l.Info("Redis connection established")
+
+	return rdb, func() {
+		l.Info("Redis client closing...")
+
+		if err := rdb.Close(); err != nil {
+			l.Error("rdb.Close", zap.Error(err))
+		}
+	}
+}
+
+type pinger interface {
+	Ping(ctx context.Context) error
+}
+
+// healthCheck pings every dependency the API cannot work without.
+type healthCheck []pinger
+
+func (h healthCheck) Ping(ctx context.Context) error {
+	for _, p := range h {
+		if err := p.Ping(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // smsSender is satisfied by every SMS driver.
@@ -114,10 +160,11 @@ type useCases struct {
 	userUpdater *userupdater.UseCase
 	userDeleter *userdeleter.UseCase
 
-	otpSender *otpsender.UseCase
+	otpSender   *otpsender.UseCase
+	otpVerifier *otpverifier.UseCase
 }
 
-func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, drv *drivers) *useCases {
+func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, cache *redisstore.Store, drv *drivers) *useCases {
 	return &useCases{
 		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity()),
 		activityLister:  activitylister.New(l.Named("usecase.activity_lister"), store.Activity()),
@@ -129,15 +176,16 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		userUpdater: userupdater.New(l.Named("usecase.user_updater"), store.User()),
 		userDeleter: userdeleter.New(l.Named("usecase.user_deleter"), store.User()),
 
-		otpSender: otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, store, store.OTP(), store.User(), drv.sms),
+		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
+		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), *cfg.OTP, cache.OTP()),
 	}
 }
 
-func initREST(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, ucs *useCases) (*rest.Server, func()) {
+func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCases) (*rest.Server, func()) {
 	httpSrv := rest.New(
 		cfg,
 		l.Named("gateway.REST"),
-		store,
+		health,
 		ucs.activityCreator,
 		ucs.activityLister,
 		ucs.activityGetter,
@@ -149,7 +197,8 @@ func initREST(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, ucs
 			Deleter: ucs.userDeleter,
 		},
 		rest.OTPUseCases{
-			Sender: ucs.otpSender,
+			Sender:   ucs.otpSender,
+			Verifier: ucs.otpVerifier,
 		},
 	)
 

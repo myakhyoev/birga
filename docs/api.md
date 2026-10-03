@@ -23,15 +23,15 @@ Every response, success or failure, has the same shape:
 | error_code | HTTP | Meaning | Typical cause |
 |---:|---:|---|---|
 | 0 | 200 | success | |
-| -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"` |
+| -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key` |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured) |
-| -30 | 404 | not found | unknown id, unpublished activity on a public endpoint, soft-deleted user |
+| -30 | 404 | not found | unknown id, unpublished activity on a public endpoint, soft-deleted user, OTP expired or not requested |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
-| -60 | 503 | dependency unavailable | `/health` when the database is unreachable |
-| -70 | 429 | rate limited | OTP requested again too soon, or too many OTPs for a phone or IP |
+| -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable |
+| -70 | 429 | rate limited | OTP requested again too soon, too many OTPs for a phone or IP, too many wrong OTP codes |
 
 For 500s the client only sees `"internal error"`. Find the real message in the logs by the
 request id.
@@ -73,7 +73,7 @@ List endpoints take `limit` (default 20, capped at 100, must be positive) and `o
 | Method | Path | Description |
 |---|---|---|
 | GET | `/ping` | liveness; always `data: "Pong"` |
-| GET | `/health` | readiness; pings the database, `data: "OK"` or 503 |
+| GET | `/health` | readiness; pings the database and Redis, `data: "OK"` or 503 |
 | GET | `/swagger/*any` | Swagger UI and spec |
 
 Metrics are on a separate port (`METRICS_PORT`, default 9090) at `/metrics`.
@@ -144,12 +144,15 @@ curl -X POST localhost:8080/v1/admin/activities \
 
 ### OTP (public)
 
-Sends a one-time code by SMS through Play Mobile. Checking the code (verify) is a separate,
-upcoming endpoint.
+One-time codes sent by SMS through Play Mobile, for registration and for changing account
+data. The code lives in Redis between send and verify.
 
 | Method | Path | Description |
 |---|---|---|
 | POST | `/v1/otp/send` | generate a 6-digit code and send it to a phone |
+| POST | `/v1/otp/verify` | check a code; a matching code is deleted |
+
+#### Send
 
 Body (all fields required):
 
@@ -170,35 +173,63 @@ Body (all fields required):
 Response `data`:
 
 ```json
-{"expires_in": 180, "resend_in": 60}
+{"expires_in": 120, "resend_in": 60}
 ```
 
-`expires_in` is how many seconds the code stays valid (`OTP_TTL`); `resend_in` is how many
-seconds the client must wait before asking for another code (`OTP_RESEND_COOLDOWN`).
+`expires_in` is how many seconds the code stays valid (`OTP_TTL`, 2 minutes); `resend_in` is
+how many seconds the client must wait before asking for another code (`OTP_RESEND_COOLDOWN`).
 
 Behaviour (`usecases/otp_sender`):
 
 - `sign_up`: the number must not belong to an active user, otherwise 409
   `phone number is already registered`. `update_user` does not check the users table.
-- Rate limits, checked under a per-phone database lock so parallel requests cannot slip
-  through, all returning 429 (code -70):
-  - one code per phone and purpose every `OTP_RESEND_COOLDOWN`; the note says how many
-    seconds are left;
-  - at most `OTP_MAX_PER_PHONE_HOUR` codes per phone per hour (any purpose);
-  - at most `OTP_MAX_PER_IP_HOUR` codes per `ip_address` per hour.
-- The code is 6 random digits (`crypto/rand`). Only a salted SHA-256 hash is stored
-  (`otp_codes`, see [data-model.md](data-model.md#otp_codes)); the plain code exists only in
-  the SMS. The SMS text (Uzbek) is `Birga: tasdiqlash kodingiz 123456. Kodni hech kimga bermang.`
-- If the SMS provider fails, the stored code is deleted (so it does not count against the
-  limits) and the client gets 500.
+- Rate limiter, checked before anything is sent, all returning 429 (code -70) with the
+  number of seconds to wait in `error_note`:
+  - one code per phone and purpose every `OTP_RESEND_COOLDOWN` (60 s): `a code was sent
+    recently, request a new one in N seconds`;
+  - at most `OTP_MAX_PER_PHONE_HOUR` (5) codes per phone per hour, both purposes together;
+  - at most `OTP_MAX_PER_IP_HOUR` (20) codes per `ip_address` per hour.
+
+  The hour is a fixed window that starts with the first code. The check and the counting are
+  one atomic Redis script, so parallel requests and several API instances cannot slip past it.
+- The code is 6 random digits (`crypto/rand`). Redis keeps only a SHA-256 hash for
+  `OTP_TTL`; a new code for the same phone and purpose replaces the previous one and resets its
+  attempts. The plain code exists only in the SMS: `Birga: tasdiqlash kodingiz 123456. Kodni
+  hech kimga bermang.`
+- If the SMS provider fails, the code is deleted and the send is not counted against the
+  limits; the client gets 500.
 - With `SMS_PROVIDER=log` (local development) nothing is sent; the SMS text, including the
   code, is written to the server log.
 
-Example:
+#### Verify
+
+Body (all fields required):
+
+```json
+{"phone_number": "+998901234567", "purpose": "sign_up", "code": "480569"}
+```
+
+`phone_number` and `purpose` must be the ones the code was sent for; `code` is 6 digits.
+A malformed field returns 422 before the code is looked up.
+
+| Result | HTTP | error_code | error_note |
+|---|---:|---:|---|
+| code matches; it is deleted and cannot be used again | 200 | 0 | `data` is `null` |
+| wrong code | 422 | -10 | `wrong code, N attempts left` |
+| wrong code and no attempts left (`OTP_MAX_VERIFY_ATTEMPTS`, 5); the code is deleted | 429 | -70 | `too many wrong codes, request a new one` |
+| no code: never sent, expired, already used, or deleted after too many attempts | 404 | -30 | `code expired or was not requested, request a new one` |
+
+The comparison runs as one Redis script, so two parallel requests cannot both use a code.
+Verify does not yet return a token that later calls (sign-up, profile update) can check.
+
+Examples:
 
 ```bash
 curl -X POST localhost:8080/v1/otp/send -H 'Content-Type: application/json' \
   -d '{"phone_number": "+998901234567", "purpose": "sign_up", "ip_address": "203.0.113.7"}'
+
+curl -X POST localhost:8080/v1/otp/verify -H 'Content-Type: application/json' \
+  -d '{"phone_number": "+998901234567", "purpose": "sign_up", "code": "480569"}'
 ```
 
 ### Users (admin)

@@ -22,58 +22,52 @@ import (
 // limitWindow is the window of the per-phone and per-IP limits.
 const limitWindow = time.Hour
 
-type otpRepo interface {
-	LockPhone(ctx context.Context, phone string) error
-	SendStats(ctx context.Context, phone string, purpose domain.OTPPurpose, ip string, since time.Time) (domain.OTPSendStats, error)
-	Create(ctx context.Context, o domain.OTP) (domain.OTP, error)
-	Delete(ctx context.Context, id string) error
+// otpStore keeps codes and the rate limiter state (Redis).
+type otpStore interface {
+	AcquireSend(ctx context.Context, phone string, purpose domain.OTPPurpose, ip string, lim domain.OTPLimits) error
+	ReleaseSend(ctx context.Context, phone string, purpose domain.OTPPurpose, ip string) error
+	SaveCode(ctx context.Context, phone string, purpose domain.OTPPurpose, hash string, ttl time.Duration) error
 }
 
 type userRepo interface {
 	ExistsByPhone(ctx context.Context, phone string) (bool, error)
 }
 
-type txRunner interface {
-	InTx(ctx context.Context, h func(context.Context) error) error
-}
-
 type smsSender interface {
 	Send(ctx context.Context, messageID, phone, text string) error
 }
 
-// UseCase generates a one-time code, stores its hash and sends it by SMS.
+// UseCase rate-limits the request, generates a one-time code, stores its hash and sends it by SMS.
 type UseCase struct {
 	l     logger.Logger
 	cfg   config.OTPConfig
-	tx    txRunner
-	otps  otpRepo
+	otps  otpStore
 	users userRepo
 	sms   smsSender
-	now   func() time.Time
 }
 
 // New creates a new OTP sender use case.
-func New(l logger.Logger, cfg config.OTPConfig, tx txRunner, otps otpRepo, users userRepo, sms smsSender) *UseCase {
+func New(l logger.Logger, cfg config.OTPConfig, otps otpStore, users userRepo, sms smsSender) *UseCase {
 	return &UseCase{
 		l:     l,
 		cfg:   cfg,
-		tx:    tx,
 		otps:  otps,
 		users: users,
 		sms:   sms,
-		now:   time.Now,
 	}
 }
 
 // Execute validates the request, applies the rate limits, stores the code and sends the SMS.
-// If the SMS fails the stored code is removed, so a failed send does not count against the limits.
+// If the SMS fails the code is dropped and the send is not counted against the limits.
 func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (domain.OTPSendResult, error) {
 	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
-	req.IPAddress = strings.TrimSpace(req.IPAddress)
 
-	if err := validate(req); err != nil {
+	ip, err := validate(req)
+	if err != nil {
 		return domain.OTPSendResult{}, err
 	}
+
+	req.IPAddress = ip
 
 	if req.Purpose == domain.OTPPurposeSignUp {
 		exists, err := uc.users.ExistsByPhone(ctx, req.PhoneNumber)
@@ -86,44 +80,22 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (doma
 		}
 	}
 
-	code, err := generateCode()
-	if err != nil {
-		return domain.OTPSendResult{}, errs.Wrap(err)
+	limits := domain.OTPLimits{
+		ResendCooldown: uc.cfg.ResendCooldown,
+		Window:         limitWindow,
+		MaxPerPhone:    uc.cfg.MaxPerPhoneHour,
+		MaxPerIP:       uc.cfg.MaxPerIPHour,
 	}
-
-	id, now := uuid.NewString(), uc.now()
-	otp := domain.OTP{
-		ID:          id,
-		PhoneNumber: req.PhoneNumber,
-		Purpose:     req.Purpose,
-		CodeHash:    domain.HashOTPCode(id, code),
-		IPAddress:   req.IPAddress,
-		ExpiresAt:   now.Add(uc.cfg.TTL),
-		CreatedAt:   now,
-	}
-
-	err = uc.tx.InTx(ctx, func(ctx context.Context) error {
-		if err := uc.otps.LockPhone(ctx, req.PhoneNumber); err != nil {
-			return err
-		}
-
-		if err := uc.checkLimits(ctx, req, now); err != nil {
-			return err
-		}
-
-		_, err := uc.otps.Create(ctx, otp)
-
-		return err
-	})
-	if err != nil {
+	if err := uc.otps.AcquireSend(ctx, req.PhoneNumber, req.Purpose, req.IPAddress, limits); err != nil {
 		return domain.OTPSendResult{}, err
 	}
 
-	l := logger.WithContext(uc.l, ctx).With(zap.String("otp_id", id), zap.String("purpose", string(req.Purpose)))
+	messageID := uuid.NewString()
+	l := logger.WithContext(uc.l, ctx).With(zap.String("message_id", messageID), zap.String("purpose", string(req.Purpose)))
 
-	if err := uc.sms.Send(ctx, id, req.PhoneNumber, smsText(code)); err != nil {
-		if delErr := uc.otps.Delete(context.WithoutCancel(ctx), id); delErr != nil {
-			l.Error("otps.Delete after failed send", zap.Error(delErr))
+	if err := uc.saveAndSend(ctx, req, messageID); err != nil {
+		if relErr := uc.otps.ReleaseSend(context.WithoutCancel(ctx), req.PhoneNumber, req.Purpose, req.IPAddress); relErr != nil {
+			l.Error("otps.ReleaseSend after failed send", zap.Error(relErr))
 		}
 
 		return domain.OTPSendResult{}, err
@@ -134,43 +106,39 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (doma
 	return domain.OTPSendResult{ExpiresIn: uc.cfg.TTL, ResendIn: uc.cfg.ResendCooldown}, nil
 }
 
-func (uc *UseCase) checkLimits(ctx context.Context, req domain.OTPSendRequest, now time.Time) error {
-	st, err := uc.otps.SendStats(ctx, req.PhoneNumber, req.Purpose, req.IPAddress, now.Add(-limitWindow))
+func (uc *UseCase) saveAndSend(ctx context.Context, req domain.OTPSendRequest, messageID string) error {
+	code, err := generateCode()
 	if err != nil {
+		return errs.Wrap(err)
+	}
+
+	hash := domain.HashOTPCode(req.PhoneNumber, req.Purpose, code)
+	if err := uc.otps.SaveCode(ctx, req.PhoneNumber, req.Purpose, hash, uc.cfg.TTL); err != nil {
 		return err
 	}
 
-	if st.LastSentAt != nil {
-		if wait := st.LastSentAt.Add(uc.cfg.ResendCooldown).Sub(now); wait > 0 {
-			return errs.Errf(errs.ErrRateLimited, "a code was sent recently, request a new one in %d seconds", int(math.Ceil(wait.Seconds())))
-		}
-	}
-
-	switch {
-	case st.PhoneCount >= uc.cfg.MaxPerPhoneHour:
-		return errs.ErrOTPPhoneLimit
-	case st.IPCount >= uc.cfg.MaxPerIPHour:
-		return errs.ErrOTPIPLimit
-	}
-
-	return nil
+	return uc.sms.Send(ctx, messageID, req.PhoneNumber, smsText(code))
 }
 
-func validate(req domain.OTPSendRequest) error {
+// validate checks the request and returns the IP address in canonical form.
+func validate(req domain.OTPSendRequest) (string, error) {
 	switch {
 	case req.PhoneNumber == "":
-		return errs.Errf(errs.ErrValidation, "phone_number is required")
+		return "", errs.Errf(errs.ErrValidation, "phone_number is required")
 	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
-		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+		return "", errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
 	case !req.Purpose.IsKnown():
-		return errs.Errf(errs.ErrValidation, "purpose must be %q or %q", domain.OTPPurposeSignUp, domain.OTPPurposeUpdateUser)
-	case req.IPAddress == "":
-		return errs.Errf(errs.ErrValidation, "ip_address is required")
-	case net.ParseIP(req.IPAddress) == nil:
-		return errs.Errf(errs.ErrValidation, "ip_address must be an IPv4 or IPv6 address")
+		return "", errs.Errf(errs.ErrValidation, "purpose must be %q or %q", domain.OTPPurposeSignUp, domain.OTPPurposeUpdateUser)
+	case strings.TrimSpace(req.IPAddress) == "":
+		return "", errs.Errf(errs.ErrValidation, "ip_address is required")
 	}
 
-	return nil
+	ip := net.ParseIP(strings.TrimSpace(req.IPAddress))
+	if ip == nil {
+		return "", errs.Errf(errs.ErrValidation, "ip_address must be an IPv4 or IPv6 address")
+	}
+
+	return ip.String(), nil
 }
 
 // generateCode returns a uniformly random numeric code of domain.OTPCodeLength digits.

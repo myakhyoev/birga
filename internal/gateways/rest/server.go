@@ -74,9 +74,14 @@ type otpSender interface {
 	Execute(ctx context.Context, req domain.OTPSendRequest) (domain.OTPSendResult, error)
 }
 
+type otpVerifier interface {
+	Execute(ctx context.Context, req domain.OTPVerifyRequest) error
+}
+
 // OTPUseCases groups the use cases behind the /v1/otp endpoints.
 type OTPUseCases struct {
-	Sender otpSender
+	Sender   otpSender
+	Verifier otpVerifier
 }
 
 type Server struct {
@@ -96,7 +101,8 @@ type Server struct {
 	userUpdater userUpdater
 	userDeleter userDeleter
 
-	otpSender otpSender
+	otpSender   otpSender
+	otpVerifier otpVerifier
 }
 
 func New(cfg config.Application,
@@ -135,6 +141,7 @@ func New(cfg config.Application,
 		userUpdater:     users.Updater,
 		userDeleter:     users.Deleter,
 		otpSender:       otp.Sender,
+		otpVerifier:     otp.Verifier,
 	}
 
 	s.httpServer = &http.Server{

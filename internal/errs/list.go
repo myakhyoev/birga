@@ -18,6 +18,6 @@ var (
 	ErrPhoneNumberTaken = Errf(ErrConflict, "phone number is already taken")
 
 	ErrPhoneNumberRegistered = Errf(ErrConflict, "phone number is already registered")
-	ErrOTPPhoneLimit         = Errf(ErrRateLimited, "too many codes requested for this phone number, try again later")
-	ErrOTPIPLimit            = Errf(ErrRateLimited, "too many codes requested from this IP address, try again later")
+	ErrOTPNotFound           = Errf(ErrNotFound, "code expired or was not requested, request a new one")
+	ErrOTPTooManyAttempts    = Errf(ErrRateLimited, "too many wrong codes, request a new one")
 )

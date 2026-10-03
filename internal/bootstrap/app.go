@@ -11,6 +11,7 @@ import (
 	"gitlab.com/loyihalar/birga/backend/internal/config"
 	"gitlab.com/loyihalar/birga/backend/internal/dbstore"
 	"gitlab.com/loyihalar/birga/backend/internal/gateways/rest"
+	"gitlab.com/loyihalar/birga/backend/internal/redisstore"
 	"gitlab.com/loyihalar/birga/backend/pkg/logger"
 	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
 )
@@ -43,13 +44,19 @@ func New(cfg config.Application) *App {
 	// build db storage
 	store := dbstore.New(pool)
 
+	rdb, closeRedis := initRedis(l, cfg.Redis)
+	teardown = append(teardown, closeRedis)
+
+	// build redis storage (one-time codes, rate limits)
+	cache := redisstore.New(rdb)
+
 	// build integrations with other services
 	drv := buildDrivers(l, cfg)
 
 	// build usecases
-	ucs := buildUseCases(l, cfg, store, drv)
+	ucs := buildUseCases(l, cfg, store, cache, drv)
 
-	httpSrv, shutdown := initREST(l, cfg, store, ucs)
+	httpSrv, shutdown := initREST(l, cfg, healthCheck{store, cache}, ucs)
 	teardown = append(teardown, shutdown)
 
 	return &App{

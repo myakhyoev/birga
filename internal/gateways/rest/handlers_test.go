@@ -81,7 +81,7 @@ func newTestServer(adminKey string) (*Server, *deps) {
 		Getter:  userGetterFunc(d.users.get),
 		Updater: userUpdaterFunc(d.users.update),
 		Deleter: userDeleterFunc(d.users.delete),
-	}, OTPUseCases{Sender: d.otp})
+	}, OTPUseCases{Sender: d.otp, Verifier: otpVerifierFunc(d.otp.verify)})
 
 	return s, d
 }

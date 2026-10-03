@@ -22,6 +22,8 @@ type Application struct {
 
 	PlayMobile *PlayMobileConfig `env:", prefix=PLAYMOBILE_"`
 
+	Redis *RedisConfig `env:", prefix=REDIS_"`
+
 	OTP *OTPConfig `env:", prefix=OTP_"`
 }
 
@@ -52,8 +54,17 @@ type PlayMobileConfig struct {
 
 // OTPConfig controls one-time codes sent by SMS and the limits on sending them.
 type OTPConfig struct {
-	TTL             time.Duration `env:"TTL, default=3m"`
+	TTL             time.Duration `env:"TTL, default=2m"`
 	ResendCooldown  time.Duration `env:"RESEND_COOLDOWN, default=1m"`
 	MaxPerPhoneHour int           `env:"MAX_PER_PHONE_HOUR, default=5"`
 	MaxPerIPHour    int           `env:"MAX_PER_IP_HOUR, default=20"`
+	// MaxVerifyAttempts wrong codes delete the code; the user must request a new one.
+	MaxVerifyAttempts int `env:"MAX_VERIFY_ATTEMPTS, default=5"`
+}
+
+// RedisConfig configures the Redis client that holds one-time codes and rate limits.
+type RedisConfig struct {
+	// URL is a redis:// or rediss:// URL, e.g. redis://:password@localhost:6379/0
+	URL            string        `env:"URL, default=redis://localhost:6379/0"`
+	ConnectTimeout time.Duration `env:"CONNECT_TIMEOUT, default=5s"`
 }

@@ -42,7 +42,7 @@ func (s *Server) Health() gin.HandlerFunc {
 
 		if err := s.health.Ping(ctx); err != nil {
 			logger.WithContext(s.l, ctx).Error("health.Ping", zap.Error(err))
-			fail(c, http.StatusServiceUnavailable, _errCodeUnavailable, "database unavailable")
+			fail(c, http.StatusServiceUnavailable, _errCodeUnavailable, "database or redis unavailable")
 
 			return
 		}
