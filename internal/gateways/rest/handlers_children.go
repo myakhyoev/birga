@@ -322,6 +322,39 @@ func (s *Server) CreateChild() gin.HandlerFunc {
 	}
 }
 
+// GetChild godoc swagger
+// @Summary one of the signed-in user's children
+// @Description - only the child's parents can read it; any other id, or a deleted child, is 404
+// @Tags children
+// @Security BearerAuth
+// @Produce json
+// @Param id path string true "child id (UUID)"
+// @Success 200 {object} rest.R{data=rest.childView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/children/{id} [GET]
+func (s *Server) GetChild() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		childID := c.Param("id")
+		if err := ValidateUUID(childID); err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		child, err := s.childGetter.Execute(c.Request.Context(), currentUserID(c), childID)
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, toChildView(child), nil)
+	}
+}
+
 type childView struct {
 	ID        string    `json:"id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	Name      string    `json:"name" example:"Amir"`

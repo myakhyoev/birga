@@ -42,6 +42,16 @@ func TestAuthRepo(t *testing.T) {
 			t.Fatalf("Get = %+v, %v; want %+v", got, err, want)
 		}
 
+		if err := s.Auth().SetCredentials(ctx, domain.UserAuth{
+			UserID: u.ID, PasswordHash: "bcrypt2", AccessTokenHash: "a4", RefreshTokenHash: "r4",
+		}); err != nil {
+			t.Fatalf("SetCredentials: %v", err)
+		}
+
+		if got, _ := s.Auth().Get(ctx, u.ID); got.PasswordHash != "bcrypt2" || got.AccessTokenHash != "a4" || got.RefreshTokenHash != "r4" {
+			t.Fatalf("after SetCredentials: %+v", got)
+		}
+
 		// A soft delete removes the auth row.
 		if err := s.User().Delete(ctx, u.ID); err != nil {
 			t.Fatalf("Delete: %v", err)
@@ -53,6 +63,10 @@ func TestAuthRepo(t *testing.T) {
 
 		if err := s.Auth().SetAccessToken(ctx, u.ID, "a3"); !errors.Is(err, errs.ErrUserNotFound) {
 			t.Fatalf("SetAccessToken after delete: %v", err)
+		}
+
+		if err := s.Auth().SetCredentials(ctx, domain.UserAuth{UserID: u.ID}); !errors.Is(err, errs.ErrUserNotFound) {
+			t.Fatalf("SetCredentials after delete: %v", err)
 		}
 	})
 }

@@ -30,8 +30,19 @@ func (s *Server) endpoints() {
 	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
 	v1.POST("/children", s.userAuth(domain.UserRoleUser, domain.UserRolePaidUser, domain.UserRoleAdmin), s.CreateChild())
 
+	// The signed-in user's own account. Every role may use it.
+	me := v1.Group("/me", s.userAuth())
+	{
+		me.GET("", s.GetProfile())
+		me.PATCH("", s.UpdateProfile())
+		me.DELETE("", s.DeleteAccount())
+		me.PUT("/password", s.ResetPassword())
+		me.GET("/children", s.ListMyChildren())
+	}
+
 	child := v1.Group("/children/:id", s.userAuth())
 	{
+		child.GET("", s.GetChild())
 		child.GET("/recommendation", s.RecommendActivity())
 		child.POST("/completions", s.CompleteActivity())
 		child.GET("/completions", s.ListCompletions())

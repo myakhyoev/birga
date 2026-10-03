@@ -1168,6 +1168,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/children/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- only the child's parents can read it; any other id, or a deleted child, is 404",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "children"
+                ],
+                "summary": "one of the signed-in user's children",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "child id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.childView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/children/{id}/completions": {
             "get": {
                 "security": [
@@ -1500,6 +1570,325 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- the user row plus the current role (user, paid_user or admin)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "the signed-in user's profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.profileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- a soft delete: the user disappears from reads and their username and phone number can be used again\n- their tokens are removed at once, so the access token used here stops working\n- their children go too, unless another parent still has the child",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "deletes the signed-in user's account",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- \"\" clears name, username or photo_id; phone_number cannot be cleared\n- name: at most 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\nphoto_id: an id from POST /v1/media (422 if unknown)\n- a new phone_number must be an Uzbek number (+998 and 9 digits) verified first:\nPOST /v1/otp/send and /v1/otp/verify with purpose update_user for the new number (403 otherwise);\nthe change uses the verification up. Sending the current number is not a change\n- username or phone number already used by someone else: 409",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "edits the signed-in user's profile partially",
+                "parameters": [
+                    {
+                        "description": "fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdateProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.profileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/children": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- only children linked to the caller; deleted children are left out\n- GET /v1/children/{id} returns one of them",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "lists the signed-in user's children, newest first",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "page size (default 20, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.childListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/me/password": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the\nuser's own phone number; without that verification: 403. A successful reset uses it up\n- password: 8 to 72 bytes, stored as a bcrypt hash (422)\n- returns a new token pair; every token issued before, on any device, stops working",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "sets a new password for the signed-in user, confirmed by an SMS code",
+                "parameters": [
+                    {
+                        "description": "new password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.ResetPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tokenPairView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/media": {
             "post": {
                 "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 5 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from\n- 503 when S3 is not configured (S3_BUCKET empty)",
@@ -1711,6 +2100,19 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "domain.UserRole": {
+            "type": "string",
+            "enum": [
+                "user",
+                "admin",
+                "paid_user"
+            ],
+            "x-enum-varnames": [
+                "UserRoleUser",
+                "UserRoleAdmin",
+                "UserRolePaidUser"
+            ]
+        },
         "rest.BadRequestResponse": {
             "type": "object",
             "properties": {
@@ -1979,6 +2381,15 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.ResetPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "example": "n3w-s3cret-pass"
+                }
+            }
+        },
         "rest.SendOTPRequest": {
             "type": "object",
             "properties": {
@@ -2188,6 +2599,27 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.UpdateProfileRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Dilnoza"
+                },
+                "phone_number": {
+                    "type": "string",
+                    "example": "+998901234567"
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "dilnoza_95"
+                }
+            }
+        },
         "rest.UpdateUserRequest": {
             "type": "object",
             "properties": {
@@ -2313,6 +2745,29 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "rest.childListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.childView"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 2
                 }
             }
         },
@@ -2472,6 +2927,50 @@ const docTemplate = `{
                 "url": {
                     "type": "string",
                     "example": "https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg"
+                }
+            }
+        },
+        "rest.profileView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Dilnoza"
+                },
+                "phone_number": {
+                    "type": "string",
+                    "example": "+998901234567"
+                },
+                "photo_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "role": {
+                    "enum": [
+                        "user",
+                        "paid_user",
+                        "admin"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.UserRole"
+                        }
+                    ],
+                    "example": "user"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "dilnoza_95"
                 }
             }
         },

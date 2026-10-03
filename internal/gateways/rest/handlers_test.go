@@ -73,17 +73,19 @@ type deps struct {
 	auth    *fakeAuth
 	edit    *fakeActivityEdit
 	kids    *fakeChildActivities
+	me      *fakeMe
 }
 
 func newTestServer(adminKey string) (*Server, *deps) {
 	gin.SetMode(gin.TestMode)
 
 	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}, otp: &fakeOTPSender{}, media: &fakeMedia{}, auth: &fakeAuth{},
-		edit: &fakeActivityEdit{}, kids: &fakeChildActivities{}}
+		edit: &fakeActivityEdit{}, kids: &fakeChildActivities{}, me: &fakeMe{}}
 	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter,
 		ActivityEditUseCases{Updater: d.edit, Deleter: activityDeleterFunc(d.edit.delete)},
 		ChildActivityUseCases{
 			Creator:     childCreatorFunc(d.kids.create),
+			Getter:      childGetterFunc(d.me.getChild),
 			Recommender: d.kids,
 			Recorder:    recorderFunc(d.kids.record),
 			Lister:      completionListerFunc(d.kids.list),
@@ -94,6 +96,10 @@ func newTestServer(adminKey string) (*Server, *deps) {
 			Getter:  userGetterFunc(d.users.get),
 			Updater: userUpdaterFunc(d.users.update),
 			Deleter: userDeleterFunc(d.users.delete),
+		}, MeUseCases{
+			Updater:  profileUpdaterFunc(d.me.update),
+			Password: passwordResetterFunc(d.me.resetPassword),
+			Children: childListerFunc(d.me.listChildren),
 		}, OTPUseCases{Sender: d.otp, Verifier: otpVerifierFunc(d.otp.verify)},
 		AuthUseCases{SignUp: d.auth, Refresher: refresherFunc(d.auth.refresh), Checker: checkerFunc(d.auth.check)}, d.media)
 

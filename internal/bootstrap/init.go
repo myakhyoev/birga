@@ -25,11 +25,15 @@ import (
 	activityrecommender "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_recommender"
 	activityupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/activity_updater"
 	childcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/child_creator"
+	childgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/child_getter"
+	childlister "gitlab.com/loyihalar/birga/backend/internal/usecases/child_lister"
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
+	passwordresetter "gitlab.com/loyihalar/birga/backend/internal/usecases/password_resetter"
+	profileupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/profile_updater"
 	streakgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/streak_getter"
 	tokenchecker "gitlab.com/loyihalar/birga/backend/internal/usecases/token_checker"
 	tokenrefresher "gitlab.com/loyihalar/birga/backend/internal/usecases/token_refresher"
@@ -216,6 +220,8 @@ type useCases struct {
 	activityDeleter *activitydeleter.UseCase
 
 	childCreator        *childcreator.UseCase
+	childGetter         *childgetter.UseCase
+	childLister         *childlister.UseCase
 	activityRecommender *activityrecommender.UseCase
 	completionRecorder  *completionrecorder.UseCase
 	completionLister    *completionlister.UseCase
@@ -226,6 +232,9 @@ type useCases struct {
 	userGetter  *usergetter.UseCase
 	userUpdater *userupdater.UseCase
 	userDeleter *userdeleter.UseCase
+
+	profileUpdater   *profileupdater.UseCase
+	passwordResetter *passwordresetter.UseCase
 
 	otpSender   *otpsender.UseCase
 	otpVerifier *otpverifier.UseCase
@@ -249,6 +258,11 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		l.Fatal("tokens.New", zap.Error(err))
 	}
 
+	var (
+		userGetter  = usergetter.New(l.Named("usecase.user_getter"), store.User())
+		userUpdater = userupdater.New(l.Named("usecase.user_updater"), store.User())
+	)
+
 	return &useCases{
 		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity()),
 		activityLister:  activitylister.New(l.Named("usecase.activity_lister"), store.Activity()),
@@ -257,6 +271,8 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		activityDeleter: activitydeleter.New(l.Named("usecase.activity_deleter"), store.Activity()),
 
 		childCreator:        childcreator.New(l.Named("usecase.child_creator"), store, store.Child()),
+		childGetter:         childgetter.New(l.Named("usecase.child_getter"), store.Child()),
+		childLister:         childlister.New(l.Named("usecase.child_lister"), store.Child()),
 		activityRecommender: activityrecommender.New(l.Named("usecase.activity_recommender"), store.Child(), store.Activity()),
 		completionRecorder: completionrecorder.New(l.Named("usecase.completion_recorder"),
 			store.Child(), store.Activity(), store.Completion()),
@@ -265,9 +281,11 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 
 		userCreator: usercreator.New(l.Named("usecase.user_creator"), store.User()),
 		userLister:  userlister.New(l.Named("usecase.user_lister"), store.User()),
-		userGetter:  usergetter.New(l.Named("usecase.user_getter"), store.User()),
-		userUpdater: userupdater.New(l.Named("usecase.user_updater"), store.User()),
+		userGetter:  userGetter,
+		userUpdater: userUpdater,
 		userDeleter: userdeleter.New(l.Named("usecase.user_deleter"), store.User()),
+
+		profileUpdater: profileupdater.New(l.Named("usecase.profile_updater"), cache.OTP(), userGetter, userUpdater),
 
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), checkOTPDefaultCode(l, cfg), cache.OTP()),
@@ -275,6 +293,8 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		signUp:         usersignup.New(l.Named("usecase.user_signup"), cache.OTP(), store, store.User(), store.Auth(), jwt),
 		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),
 		tokenChecker:   tokenchecker.New(l.Named("usecase.token_checker"), jwt, store.Auth()),
+		passwordResetter: passwordresetter.New(l.Named("usecase.password_resetter"),
+			cache.OTP(), store.User(), store.Auth(), jwt),
 
 		mediaUploader: mediaUploader,
 	}
@@ -303,6 +323,7 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 		},
 		rest.ChildActivityUseCases{
 			Creator:     ucs.childCreator,
+			Getter:      ucs.childGetter,
 			Recommender: ucs.activityRecommender,
 			Recorder:    ucs.completionRecorder,
 			Lister:      ucs.completionLister,
@@ -314,6 +335,11 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			Getter:  ucs.userGetter,
 			Updater: ucs.userUpdater,
 			Deleter: ucs.userDeleter,
+		},
+		rest.MeUseCases{
+			Updater:  ucs.profileUpdater,
+			Password: ucs.passwordResetter,
+			Children: ucs.childLister,
 		},
 		rest.OTPUseCases{
 			Sender:   ucs.otpSender,

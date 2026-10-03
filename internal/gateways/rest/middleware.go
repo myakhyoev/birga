@@ -86,3 +86,11 @@ func (s *Server) userAuth(roles ...domain.UserRole) gin.HandlerFunc {
 func currentUserID(c *gin.Context) string {
 	return c.GetString(userIDKey)
 }
+
+// currentUserRole returns the role userAuth stored; it is empty on routes without userAuth.
+func currentUserRole(c *gin.Context) domain.UserRole {
+	role, _ := c.Get(userRoleKey)
+	r, _ := role.(domain.UserRole)
+
+	return r
+}

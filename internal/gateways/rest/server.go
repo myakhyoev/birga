@@ -77,9 +77,14 @@ type childCreator interface {
 	Execute(ctx context.Context, userID string, c domain.Child) (domain.Child, error)
 }
 
+type childGetter interface {
+	Execute(ctx context.Context, userID, childID string) (domain.Child, error)
+}
+
 // ChildActivityUseCases groups the use cases behind the signed-in /v1/children endpoints.
 type ChildActivityUseCases struct {
 	Creator     childCreator
+	Getter      childGetter
 	Recommender activityRecommender
 	Recorder    completionRecorder
 	Lister      completionLister
@@ -113,6 +118,26 @@ type UserUseCases struct {
 	Getter  userGetter
 	Updater userUpdater
 	Deleter userDeleter
+}
+
+type profileUpdater interface {
+	Execute(ctx context.Context, userID string, upd domain.UserUpdate) (domain.User, error)
+}
+
+type passwordResetter interface {
+	Execute(ctx context.Context, userID, password string) (domain.TokenPair, error)
+}
+
+type childLister interface {
+	Execute(ctx context.Context, userID string, f domain.ChildFilter) ([]domain.Child, int, error)
+}
+
+// MeUseCases groups the use cases behind the signed-in /v1/me endpoints that the admin user
+// use cases (UserUseCases.Getter and Deleter) do not cover.
+type MeUseCases struct {
+	Updater  profileUpdater
+	Password passwordResetter
+	Children childLister
 }
 
 type otpSender interface {
@@ -168,6 +193,7 @@ type Server struct {
 	activityDeleter activityDeleter
 
 	childCreator        childCreator
+	childGetter         childGetter
 	activityRecommender activityRecommender
 	completionRecorder  completionRecorder
 	completionLister    completionLister
@@ -178,6 +204,10 @@ type Server struct {
 	userGetter  userGetter
 	userUpdater userUpdater
 	userDeleter userDeleter
+
+	profileUpdater   profileUpdater
+	passwordResetter passwordResetter
+	childLister      childLister
 
 	otpSender   otpSender
 	otpVerifier otpVerifier
@@ -199,6 +229,7 @@ func New(cfg config.Application,
 	activityEdit ActivityEditUseCases,
 	childActivities ChildActivityUseCases,
 	users UserUseCases,
+	me MeUseCases,
 	otp OTPUseCases,
 	auth AuthUseCases,
 	media mediaUploader,
@@ -228,16 +259,22 @@ func New(cfg config.Application,
 		activityDeleter: activityEdit.Deleter,
 
 		childCreator:        childActivities.Creator,
+		childGetter:         childActivities.Getter,
 		activityRecommender: childActivities.Recommender,
 		completionRecorder:  childActivities.Recorder,
 		completionLister:    childActivities.Lister,
 		streakGetter:        childActivities.Streak,
 
-		userCreator:    users.Creator,
-		userLister:     users.Lister,
-		userGetter:     users.Getter,
-		userUpdater:    users.Updater,
-		userDeleter:    users.Deleter,
+		userCreator: users.Creator,
+		userLister:  users.Lister,
+		userGetter:  users.Getter,
+		userUpdater: users.Updater,
+		userDeleter: users.Deleter,
+
+		profileUpdater:   me.Updater,
+		passwordResetter: me.Password,
+		childLister:      me.Children,
+
 		otpSender:      otp.Sender,
 		otpVerifier:    otp.Verifier,
 		signUp:         auth.SignUp,

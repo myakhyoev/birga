@@ -11,8 +11,9 @@ import (
 type OTPPurpose string
 
 const (
-	OTPPurposeSignUp     OTPPurpose = "sign_up"
-	OTPPurposeUpdateUser OTPPurpose = "update_user"
+	OTPPurposeSignUp        OTPPurpose = "sign_up"
+	OTPPurposeUpdateUser    OTPPurpose = "update_user"
+	OTPPurposeResetPassword OTPPurpose = "reset_password"
 )
 
 // OTPCodeLength is the number of digits in a one-time code.
@@ -27,8 +28,11 @@ var (
 
 // IsKnown reports whether p is one of the supported purposes.
 func (p OTPPurpose) IsKnown() bool {
-	return p == OTPPurposeSignUp || p == OTPPurposeUpdateUser
+	return p == OTPPurposeSignUp || p == OTPPurposeUpdateUser || p == OTPPurposeResetPassword
 }
+
+// OTPPurposesHint lists the supported purposes for validation messages.
+const OTPPurposesHint = `"sign_up", "update_user" or "reset_password"`
 
 // OTPSendRequest asks for a code to be sent to PhoneNumber. IPAddress is the end user's IP,
 // used for rate limiting.

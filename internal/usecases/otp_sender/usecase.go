@@ -69,15 +69,8 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (doma
 
 	req.IPAddress = ip
 
-	if req.Purpose == domain.OTPPurposeSignUp {
-		exists, err := uc.users.ExistsByPhone(ctx, req.PhoneNumber)
-		if err != nil {
-			return domain.OTPSendResult{}, err
-		}
-
-		if exists {
-			return domain.OTPSendResult{}, errs.ErrPhoneNumberRegistered
-		}
+	if err := uc.checkOwner(ctx, req); err != nil {
+		return domain.OTPSendResult{}, err
 	}
 
 	limits := domain.OTPLimits{
@@ -106,6 +99,29 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.OTPSendRequest) (doma
 	return domain.OTPSendResult{ExpiresIn: uc.cfg.TTL, ResendIn: uc.cfg.ResendCooldown}, nil
 }
 
+// checkOwner applies the per-purpose rule on who owns the number, so no SMS is spent on a request
+// that cannot succeed: sign_up needs a number no user has, reset_password needs a user's number.
+// update_user is not checked.
+func (uc *UseCase) checkOwner(ctx context.Context, req domain.OTPSendRequest) error {
+	if req.Purpose != domain.OTPPurposeSignUp && req.Purpose != domain.OTPPurposeResetPassword {
+		return nil
+	}
+
+	exists, err := uc.users.ExistsByPhone(ctx, req.PhoneNumber)
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case req.Purpose == domain.OTPPurposeSignUp && exists:
+		return errs.ErrPhoneNumberRegistered
+	case req.Purpose == domain.OTPPurposeResetPassword && !exists:
+		return errs.ErrPhoneNumberNotRegistered
+	}
+
+	return nil
+}
+
 func (uc *UseCase) saveAndSend(ctx context.Context, req domain.OTPSendRequest, messageID string) error {
 	code, err := generateCode()
 	if err != nil {
@@ -128,7 +144,7 @@ func validate(req domain.OTPSendRequest) (string, error) {
 	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
 		return "", errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
 	case !req.Purpose.IsKnown():
-		return "", errs.Errf(errs.ErrValidation, "purpose must be %q or %q", domain.OTPPurposeSignUp, domain.OTPPurposeUpdateUser)
+		return "", errs.Errf(errs.ErrValidation, "purpose must be %s", domain.OTPPurposesHint)
 	case strings.TrimSpace(req.IPAddress) == "":
 		return "", errs.Errf(errs.ErrValidation, "ip_address is required")
 	}

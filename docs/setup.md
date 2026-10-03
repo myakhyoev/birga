@@ -85,7 +85,7 @@ with `sethvargo/go-envconfig`). `.env.example` lists the usual ones.
 | `OTP_MAX_PER_IP_HOUR` | `20` | codes per IP address per hour |
 | `OTP_MAX_VERIFY_ATTEMPTS` | `5` | wrong codes before the code is deleted |
 | `OTP_DEFAULT_CODE` | empty | 6 digits that `POST /v1/otp/verify` accepts for any phone without checking (development, testing, app review). Empty turns it off; the process exits if it is set with `ENVIRONMENT=production` or is not 6 digits. `.env.example` sets `654321` |
-| `OTP_VERIFIED_TTL` | `10m` | how long a matched code marks the phone as verified; `POST /v1/auth/signup` needs a `sign_up` mark |
+| `OTP_VERIFIED_TTL` | `10m` | how long a matched code marks the phone as verified; `POST /v1/auth/signup` needs a `sign_up` mark, `PATCH /v1/me` (new phone) an `update_user` one, `PUT /v1/me/password` a `reset_password` one |
 | `JWT_SECRET` | **required** | HS256 key for access and refresh tokens, at least 32 bytes (the process exits otherwise). Generate with `openssl rand -hex 32`, keep it in the server's secret store. Changing it invalidates every issued token. `.env.example` has a development-only value |
 | `JWT_ISSUER` | `birga` | `iss` claim written into and required from every token |
 | `JWT_ACCESS_TTL` | `24h` | access token lifetime |

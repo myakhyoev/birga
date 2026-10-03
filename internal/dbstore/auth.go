@@ -85,3 +85,24 @@ func (r *authRepo) SetAccessToken(ctx context.Context, userID, tokenHash string)
 
 	return nil
 }
+
+// SetCredentials replaces the user's password hash and both token hashes, so every token issued
+// before stops working.
+func (r *authRepo) SetCredentials(ctx context.Context, a domain.UserAuth) error {
+	l := logger.FromCtx(ctx, "authRepo.SetCredentials").With(zap.String("user_id", a.UserID))
+
+	q := `UPDATE user_auth SET password = $2, access_token = $3, refresh_token = $4, updated_at = NOW() WHERE id = $1`
+
+	tag, err := r.store.sqlClientByCtx(ctx).Exec(ctx, q, a.UserID, a.PasswordHash, a.AccessTokenHash, a.RefreshTokenHash)
+	if err != nil {
+		l.Error("sqlClient.Exec", zap.Error(err))
+
+		return errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	if tag.RowsAffected() == 0 {
+		return errs.ErrUserNotFound
+	}
+
+	return nil
+}

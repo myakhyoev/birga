@@ -1,5 +1,15 @@
 basePath: /
 definitions:
+  domain.UserRole:
+    enum:
+    - user
+    - admin
+    - paid_user
+    type: string
+    x-enum-varnames:
+    - UserRoleUser
+    - UserRoleAdmin
+    - UserRolePaidUser
   rest.BadRequestResponse:
     properties:
       data: {}
@@ -177,6 +187,12 @@ definitions:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
     type: object
+  rest.ResetPasswordRequest:
+    properties:
+      password:
+        example: n3w-s3cret-pass
+        type: string
+    type: object
   rest.SendOTPRequest:
     properties:
       ip_address:
@@ -317,6 +333,21 @@ definitions:
         example: Rangli toshlar
         type: string
     type: object
+  rest.UpdateProfileRequest:
+    properties:
+      name:
+        example: Dilnoza
+        type: string
+      phone_number:
+        example: "+998901234567"
+        type: string
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      username:
+        example: dilnoza_95
+        type: string
+    type: object
   rest.UpdateUserRequest:
     properties:
       name:
@@ -407,6 +438,22 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  rest.childListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.childView'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      total:
+        example: 2
+        type: integer
     type: object
   rest.childView:
     properties:
@@ -529,6 +576,36 @@ definitions:
         type: integer
       url:
         example: https://birga-media.s3.eu-central-1.amazonaws.com/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f.jpg
+        type: string
+    type: object
+  rest.profileView:
+    properties:
+      created_at:
+        type: string
+      id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+      name:
+        example: Dilnoza
+        type: string
+      phone_number:
+        example: "+998901234567"
+        type: string
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      role:
+        allOf:
+        - $ref: '#/definitions/domain.UserRole'
+        enum:
+        - user
+        - paid_user
+        - admin
+        example: user
+      updated_at:
+        type: string
+      username:
+        example: dilnoza_95
         type: string
     type: object
   rest.sendOTPView:
@@ -1373,6 +1450,49 @@ paths:
       summary: adds a child to the signed-in user
       tags:
       - children
+  /v1/children/{id}:
+    get:
+      description: '- only the child''s parents can read it; any other id, or a deleted
+        child, is 404'
+      parameters:
+      - description: child id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.childView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: one of the signed-in user's children
+      tags:
+      - children
   /v1/children/{id}/completions:
     get:
       parameters:
@@ -1590,6 +1710,215 @@ paths:
       summary: a child's streak and progress
       tags:
       - children
+  /v1/me:
+    delete:
+      description: |-
+        - a soft delete: the user disappears from reads and their username and phone number can be used again
+        - their tokens are removed at once, so the access token used here stops working
+        - their children go too, unless another parent still has the child
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: deletes the signed-in user's account
+      tags:
+      - me
+    get:
+      description: '- the user row plus the current role (user, paid_user or admin)'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.profileView'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: the signed-in user's profile
+      tags:
+      - me
+    patch:
+      consumes:
+      - application/json
+      description: |-
+        - only the fields present in the body change; omitted or null fields are kept
+        - "" clears name, username or photo_id; phone_number cannot be cleared
+        - name: at most 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
+        photo_id: an id from POST /v1/media (422 if unknown)
+        - a new phone_number must be an Uzbek number (+998 and 9 digits) verified first:
+        POST /v1/otp/send and /v1/otp/verify with purpose update_user for the new number (403 otherwise);
+        the change uses the verification up. Sending the current number is not a change
+        - username or phone number already used by someone else: 409
+      parameters:
+      - description: fields to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.profileView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/rest.ConflictResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: edits the signed-in user's profile partially
+      tags:
+      - me
+  /v1/me/children:
+    get:
+      description: |-
+        - only children linked to the caller; deleted children are left out
+        - GET /v1/children/{id} returns one of them
+      parameters:
+      - description: page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.childListView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: lists the signed-in user's children, newest first
+      tags:
+      - me
+  /v1/me/password:
+    put:
+      consumes:
+      - application/json
+      description: |-
+        - first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the
+        user's own phone number; without that verification: 403. A successful reset uses it up
+        - password: 8 to 72 bytes, stored as a bcrypt hash (422)
+        - returns a new token pair; every token issued before, on any device, stops working
+      parameters:
+      - description: new password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.tokenPairView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: sets a new password for the signed-in user, confirmed by an SMS code
+      tags:
+      - me
   /v1/media:
     post:
       consumes:

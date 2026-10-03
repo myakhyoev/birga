@@ -46,7 +46,7 @@ testable with small fakes.
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
 | `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `activity_recommender`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `token_refresher` |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `activity_recommender`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `token_refresher`, `profile_updater`, `password_resetter` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -182,7 +182,15 @@ Sign-up depends on a verified phone number, handed over through Redis rather tha
    is present and falls back to the `X-Admin-Key` check otherwise.
 5. Authorization is per resource, in the use case: per-child use cases call
    `childRepo.GetForParent(childID, userID)` first, which answers `ErrChildNotFound` for a
-   child the user is not linked to.
+   child the user is not linked to. `/v1/me...` handlers only ever pass `currentUserID(c)`, so
+   a user can only read or change their own account.
+6. Account changes reuse the verified mark: `profile_updater` wraps `user_getter` and
+   `user_updater` and, for a new phone number, requires the `update_user` mark for that
+   number; `password_resetter` requires the `reset_password` mark for the user's stored
+   number, then writes the bcrypt hash and a new token pair in one `authRepo.SetCredentials`
+   call, which signs out every other device. Both delete the mark only after the write.
+   `DELETE /v1/me` reuses `user_deleter`; the soft-delete triggers remove `user_auth` and
+   orphaned children.
 
 ## Drivers
 

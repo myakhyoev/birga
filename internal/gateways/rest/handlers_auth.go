@@ -68,11 +68,15 @@ func (s *Server) SignUp() gin.HandlerFunc {
 			return
 		}
 
-		Return(c, tokenPairView{
-			AccessToken:  pair.AccessToken,
-			RefreshToken: pair.RefreshToken,
-			ExpiresIn:    int(pair.AccessExpiresIn.Seconds()),
-		}, nil)
+		Return(c, toTokenPairView(pair), nil)
+	}
+}
+
+func toTokenPairView(pair domain.TokenPair) tokenPairView {
+	return tokenPairView{
+		AccessToken:  pair.AccessToken,
+		RefreshToken: pair.RefreshToken,
+		ExpiresIn:    int(pair.AccessExpiresIn.Seconds()),
 	}
 }
 

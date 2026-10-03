@@ -26,8 +26,8 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; sign-up without a verified phone number or with `user_role: admin` |
-| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, OTP expired or not requested |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; sign-up without a verified phone number or with `user_role: admin`; profile phone change or password reset without the matching OTP verification |
+| -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
 | -60 | 503 | dependency unavailable | `/health` when the database or Redis is unreachable; `POST /v1/media` when S3 is not configured |
@@ -63,7 +63,7 @@ CORS allows any origin.
 
 ## User authentication
 
-Endpoints for a signed-in parent (`/v1/children` and `/v1/children/{id}/...`) need the access
+Endpoints for a signed-in parent (`/v1/me...`, `/v1/children` and `/v1/children/{id}...`) need the access
 token from `/v1/auth/signup` or `/v1/auth/refresh`:
 
 - Send `Authorization: Bearer <access_token>`.
@@ -74,7 +74,7 @@ token from `/v1/auth/signup` or `/v1/auth/refresh`:
 - A route can be limited to some roles (`user`, `paid_user`, `admin`). The role checked is the
   user's current `user_auth.role`, not the token's `role` claim. A role outside the list: 403,
   code -21, `your role cannot use this endpoint`. Today `POST /v1/children` lists all three
-  roles and `/v1/admin/*` allows only `admin`.
+  roles, `/v1/me...` and `/v1/children/{id}...` take any role, and `/v1/admin/*` allows only `admin`.
 - A child id the user is not linked to (through `user_children`) answers 404, the same as a
   child that does not exist, so other families' ids cannot be probed.
 
@@ -184,6 +184,69 @@ Delete sets `deleted_at`. The activity then disappears from every list, get and
 recommendation, and a second delete is 404. Completions that point at it are kept, so a
 child's history and streak do not change. There is no undelete endpoint.
 
+### Profile (signed in)
+
+The signed-in user's own account, for the app's profile page. All of these need
+[user authentication](#user-authentication) and work for every role.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/me` | the caller's profile |
+| PATCH | `/v1/me` | edit the profile partially |
+| PUT | `/v1/me/password` | set a new password, confirmed by an SMS code |
+| DELETE | `/v1/me` | delete the account (soft delete) |
+| GET | `/v1/me/children` | the caller's children, newest first (paged) |
+
+#### Get profile
+
+Response `data` is the [user object](#user-object) plus `role` (`user`, `paid_user` or `admin`,
+the current `user_auth.role`).
+
+#### Edit profile
+
+Body: any of `name`, `username`, `phone_number`, `photo_id`. Omitted or `null` fields are kept;
+`""` clears `name`, `username` or `photo_id`. The rules are the admin update's
+(`usecases/user_updater`): `name` at most 100 characters, `username` 3 to 32 of `a-z`, `0-9`,
+`_`, `.` (lowercased), `photo_id` an id from `POST /v1/media` (422 if unknown), 409 when the
+username or phone number belongs to someone else. Response `data` is the same as Get profile.
+
+A new `phone_number` must be an Uzbek number (`+998` and 9 digits) verified first: send and
+verify an OTP with purpose `update_user` **for the new number**. Without that mark: 403
+`new phone number is not verified, ...`. A successful change deletes the mark. Sending the
+current number is not a change and needs no code. `phone_number` cannot be cleared (422).
+
+```bash
+curl -X PATCH localhost:8080/v1/me -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"name":"Dilnoza","photo_id":""}'
+```
+
+#### Reset password
+
+1. `POST /v1/otp/send` with purpose `reset_password` and the user's own phone number.
+2. `POST /v1/otp/verify` with the code.
+3. `PUT /v1/me/password` with `{"password": "n3w-s3cret-pass"}` (8 to 72 bytes, 422 otherwise).
+
+Without a `reset_password` mark for the user's number: 403 `phone number is not verified, ...`.
+On success the password is stored as a bcrypt hash, the mark is deleted, and the response
+`data` is a new token pair, the same shape as sign-up (`access_token`, `refresh_token`,
+`expires_in`). Both stored token hashes are replaced, so every token issued before, on any
+device, stops working (401); the app must switch to the new pair.
+
+#### Delete account
+
+`DELETE /v1/me` with no body. Response `data` is `null`. It is the same soft delete as
+`DELETE /v1/admin/users/{id}`: the user disappears from reads, the `user_auth` row (tokens)
+is removed by a trigger so the caller's tokens stop working at once, the username and phone
+number can be registered again, and the user's children are deleted unless another parent
+still has them (see [data-model.md](data-model.md)). There is no undo endpoint. The app should
+keep this action low-key and ask for confirmation; the API does not.
+
+#### My children
+
+`GET /v1/me/children?limit=20&offset=0` returns a [page](#pagination) of the caller's active
+children ([child object](#children-add-a-child-signed-in) fields). Use
+`GET /v1/children/{id}` for one child's page.
+
 ### Children: add a child (signed in)
 
 | Method | Path | Description |
@@ -215,7 +278,9 @@ curl -X POST localhost:8080/v1/children \
   -d '{"name":"Amir","age":4,"gender":"male"}'
 ```
 
-There is no endpoint yet to list, edit or delete a child or to add a second parent.
+`GET /v1/me/children` lists the caller's children and `GET /v1/children/{id}` returns one
+(404 when the caller is not its parent). There is no endpoint yet to edit or delete a child or
+to add a second parent.
 
 ### Children: recommendation, completions, streak (signed in)
 
@@ -314,7 +379,7 @@ Body (all fields required):
 | Field | Rules |
 |---|---|
 | `phone_number` | Uzbek mobile number in E.164: `+998` and 9 digits (422). Play Mobile only delivers in Uzbekistan |
-| `purpose` | `sign_up` (registration) or `update_user` (changing account data) (422) |
+| `purpose` | `sign_up` (registration), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`PUT /v1/me/password`) (422) |
 | `ip_address` | the end user's IPv4 or IPv6 address, as seen by the app or proxy in front of the API (422) |
 
 Response `data`:
@@ -329,12 +394,14 @@ how many seconds the client must wait before asking for another code (`OTP_RESEN
 Behaviour (`usecases/otp_sender`):
 
 - `sign_up`: the number must not belong to an active user, otherwise 409
-  `phone number is already registered`. `update_user` does not check the users table.
+  `phone number is already registered`. `reset_password`: the number must belong to an active
+  user, otherwise 404 `phone number does not belong to a user`. `update_user` does not check
+  the users table. These checks run before the rate limiter, so no SMS is spent on them.
 - Rate limiter, checked before anything is sent, all returning 429 (code -70) with the
   number of seconds to wait in `error_note`:
   - one code per phone and purpose every `OTP_RESEND_COOLDOWN` (60 s): `a code was sent
     recently, request a new one in N seconds`;
-  - at most `OTP_MAX_PER_PHONE_HOUR` (5) codes per phone per hour, both purposes together;
+  - at most `OTP_MAX_PER_PHONE_HOUR` (5) codes per phone per hour, all purposes together;
   - at most `OTP_MAX_PER_IP_HOUR` (20) codes per `ip_address` per hour.
 
   The hour is a fixed window that starts with the first code. The check and the counting are
@@ -375,8 +442,8 @@ production. Each use logs a warning `otp verified with the default code`.
 
 The comparison runs as one Redis script, so two parallel requests cannot both use a code.
 The verified mark is a Redis key (see [data-model.md](data-model.md#redis-keys)) rather than a
-token in the response: `POST /v1/auth/signup` checks it for `sign_up`; nothing reads the
-`update_user` mark yet.
+token in the response: `POST /v1/auth/signup` checks it for `sign_up`, `PATCH /v1/me` for
+`update_user` (the new number) and `PUT /v1/me/password` for `reset_password`.
 
 Examples:
 

@@ -88,7 +88,7 @@ func validate(req domain.OTPVerifyRequest) error {
 	case !domain.IsUzbekPhoneNumber(req.PhoneNumber):
 		return errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
 	case !req.Purpose.IsKnown():
-		return errs.Errf(errs.ErrValidation, "purpose must be %q or %q", domain.OTPPurposeSignUp, domain.OTPPurposeUpdateUser)
+		return errs.Errf(errs.ErrValidation, "purpose must be %s", domain.OTPPurposesHint)
 	case !domain.IsValidOTPCode(req.Code):
 		return errs.Errf(errs.ErrValidation, "code must be %d digits", domain.OTPCodeLength)
 	}

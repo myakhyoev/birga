@@ -127,6 +127,20 @@ func TestExecute_SignUpPhoneRegistered(t *testing.T) {
 	}
 }
 
+func TestExecute_ResetPasswordNeedsUser(t *testing.T) {
+	req := validReq()
+	req.Purpose = domain.OTPPurposeResetPassword
+
+	sms := &fakeSMS{}
+	if _, err := New(nil, testCfg, &fakeOTPs{}, fakeUsers{}, sms).Execute(context.Background(), req); !errors.Is(err, errs.ErrPhoneNumberNotRegistered) || sms.text != "" {
+		t.Fatalf("expected not registered and no SMS, got %v", err)
+	}
+
+	if _, err := New(nil, testCfg, &fakeOTPs{}, fakeUsers{exists: true}, &fakeSMS{}).Execute(context.Background(), req); err != nil {
+		t.Fatalf("registered number: %v", err)
+	}
+}
+
 func TestExecute_RateLimited(t *testing.T) {
 	otps, sms := &fakeOTPs{acquireErr: errs.Errf(errs.ErrRateLimited, "wait")}, &fakeSMS{}
 
