@@ -2,6 +2,8 @@ package passwordresetter
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -20,6 +22,7 @@ type verifiedStore interface {
 
 type userRepo interface {
 	Get(ctx context.Context, id string) (domain.User, error)
+	GetByPhone(ctx context.Context, phone string) (domain.User, error)
 }
 
 type authRepo interface {
@@ -32,7 +35,8 @@ type tokenIssuer interface {
 	AccessTTL() time.Duration
 }
 
-// UseCase sets a new password for the signed-in user once their phone passed a reset_password OTP check.
+// UseCase sets a new password once the user's phone passed a reset_password OTP check: for the
+// signed-in user (Execute) or for a signed-out user who forgot it (ExecuteByPhone).
 type UseCase struct {
 	l        logger.Logger
 	verified verifiedStore
@@ -51,9 +55,8 @@ func New(l logger.Logger, verified verifiedStore, users userRepo, auth authRepo,
 // bcrypt password and a new token pair, and returns the pair. Storing new token hashes signs out
 // every other device. The verification is used up only after the password is stored.
 func (uc *UseCase) Execute(ctx context.Context, userID, password string) (domain.TokenPair, error) {
-	if len(password) < domain.MinPasswordLength || len(password) > domain.MaxPasswordLength {
-		return domain.TokenPair{}, errs.Errf(errs.ErrValidation,
-			"password must be %d to %d bytes long", domain.MinPasswordLength, domain.MaxPasswordLength)
+	if err := validatePassword(password); err != nil {
+		return domain.TokenPair{}, err
 	}
 
 	user, err := uc.users.Get(ctx, userID)
@@ -65,8 +68,46 @@ func (uc *UseCase) Execute(ctx context.Context, userID, password string) (domain
 		return domain.TokenPair{}, errs.ErrResetNotVerified
 	}
 
-	phone := *user.PhoneNumber
+	return uc.reset(ctx, user.ID, *user.PhoneNumber, password)
+}
 
+// ExecuteByPhone is the signed-out "forgot password" flow: the phone number passed a reset_password
+// check, so the active user who has it gets the new password and a new token pair (signed in), and
+// every token issued before stops working. Not verified: ErrResetNotVerified; no such user:
+// ErrPhoneNumberNotRegistered.
+func (uc *UseCase) ExecuteByPhone(ctx context.Context, phone, password string) (domain.TokenPair, error) {
+	phone = strings.TrimSpace(phone)
+
+	if !domain.IsUzbekPhoneNumber(phone) {
+		return domain.TokenPair{}, errs.Errf(errs.ErrValidation, "phone_number must be an Uzbek number in E.164 format, e.g. +998901234567")
+	}
+
+	if err := validatePassword(password); err != nil {
+		return domain.TokenPair{}, err
+	}
+
+	user, err := uc.users.GetByPhone(ctx, phone)
+	if errors.Is(err, errs.ErrUserNotFound) {
+		return domain.TokenPair{}, errs.ErrPhoneNumberNotRegistered
+	}
+
+	if err != nil {
+		return domain.TokenPair{}, err
+	}
+
+	return uc.reset(ctx, user.ID, phone, password)
+}
+
+func validatePassword(password string) error {
+	if len(password) < domain.MinPasswordLength || len(password) > domain.MaxPasswordLength {
+		return errs.Errf(errs.ErrValidation,
+			"password must be %d to %d bytes long", domain.MinPasswordLength, domain.MaxPasswordLength)
+	}
+
+	return nil
+}
+
+func (uc *UseCase) reset(ctx context.Context, userID, phone, password string) (domain.TokenPair, error) {
 	ok, err := uc.verified.IsVerified(ctx, phone, domain.OTPPurposeResetPassword)
 	if err != nil {
 		return domain.TokenPair{}, err

@@ -23,9 +23,13 @@ func (s *Server) endpoints() {
 
 		v1.POST("/auth/signup", s.SignUp())
 		v1.POST("/auth/refresh", s.RefreshToken())
+		v1.POST("/auth/login", s.Login())
+		v1.POST("/auth/forgot-password", s.ForgotPassword())
 
 		v1.POST("/media", s.UploadMedia())
 	}
+
+	v1.POST("/auth/logout", s.userAuth(), s.Logout())
 
 	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
 	v1.POST("/children", s.userAuth(domain.UserRoleUser, domain.UserRolePaidUser, domain.UserRoleAdmin), s.CreateChild())

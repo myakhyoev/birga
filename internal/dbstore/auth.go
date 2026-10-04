@@ -106,3 +106,50 @@ func (r *authRepo) SetCredentials(ctx context.Context, a domain.UserAuth) error 
 
 	return nil
 }
+
+// GetByUsername returns the auth row of the active user with this sign-in username, or ErrUserNotFound.
+func (r *authRepo) GetByUsername(ctx context.Context, username string) (domain.UserAuth, error) {
+	l := logger.FromCtx(ctx, "authRepo.GetByUsername")
+
+	q := `
+		SELECT id, COALESCE(username, ''), COALESCE(password, ''), role::TEXT,
+			COALESCE(access_token, ''), COALESCE(refresh_token, '')
+		FROM user_auth WHERE username = $1`
+
+	var a domain.UserAuth
+
+	err := r.store.sqlClientByCtx(ctx).QueryRow(ctx, q, username).
+		Scan(&a.UserID, &a.Username, &a.PasswordHash, &a.Role, &a.AccessTokenHash, &a.RefreshTokenHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.UserAuth{}, errs.ErrUserNotFound
+	}
+
+	if err != nil {
+		l.Error("sqlClient.QueryRow", zap.Error(err))
+
+		return domain.UserAuth{}, errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	return a, nil
+}
+
+// SetTokens replaces both token hashes, so every token issued before stops working.
+// Empty hashes are stored as NULL, which signs the user out.
+func (r *authRepo) SetTokens(ctx context.Context, userID, accessTokenHash, refreshTokenHash string) error {
+	l := logger.FromCtx(ctx, "authRepo.SetTokens").With(zap.String("user_id", userID))
+
+	q := `UPDATE user_auth SET access_token = $2, refresh_token = $3, updated_at = NOW() WHERE id = $1`
+
+	tag, err := r.store.sqlClientByCtx(ctx).Exec(ctx, q, userID, nullIfEmpty(accessTokenHash), nullIfEmpty(refreshTokenHash))
+	if err != nil {
+		l.Error("sqlClient.Exec", zap.Error(err))
+
+		return errs.Errf(errs.ErrInternal, "%s", err.Error())
+	}
+
+	if tag.RowsAffected() == 0 {
+		return errs.ErrUserNotFound
+	}
+
+	return nil
+}

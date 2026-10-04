@@ -941,6 +941,189 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/auth/forgot-password": {
+            "post": {
+                "description": "- first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the\nuser's phone number; without that verification: 403. A successful reset uses it up\n- phone_number: +998 and 9 digits; password: 8 to 72 bytes, stored as a bcrypt hash (422)\n- no user has this phone number: 404\n- returns a new token pair (the user is signed in); every token issued before stops working",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "sets a new password for a signed-out user, confirmed by an SMS code",
+                "parameters": [
+                    {
+                        "description": "phone number and new password",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForgotPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tokenPairView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/login": {
+            "post": {
+                "description": "- username is case-insensitive; username and password are required (422)\n- unknown username or wrong password: 401 with the same message, so it does not tell\nwhich usernames exist\n- returns a new token pair, like sign-up. Only the newest pair is valid, so signing in\nsigns out every other device",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "signs a user in with username and password",
+                "parameters": [
+                    {
+                        "description": "credentials",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.tokenPairView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/auth/logout": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- the access token used here and the refresh token stop working at once (401 afterwards);\nsign in again with POST /v1/auth/login",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "signs the user out",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/refresh": {
             "post": {
                 "description": "- refresh_token must be signed by this API, unexpired, of type refresh, and still the\none stored for the user (a deleted user's token stops working); otherwise 401\n- the refresh token is not rotated; keep using it until it expires",
@@ -1960,7 +2143,7 @@ const docTemplate = `{
         },
         "/v1/otp/send": {
             "post": {
-                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise) or update_user\n- ip_address: the end user's IPv4 or IPv6 address, used for rate limits\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP",
+                "description": "- phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)\n- purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or\nreset_password (the number must belong to a user, 404 otherwise; used by forgot password and\nPUT /v1/me/password)\n- ip_address: the end user's IPv4 or IPv6 address, used for rate limits\n- the code has 6 digits and is sent through Play Mobile; only its hash is stored\n- the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new\ncode replaces the previous one for the same phone and purpose\n- rate limiter (429): one code per phone and purpose per resend_in seconds, and per hour\nat most OTP_MAX_PER_PHONE_HOUR codes per phone and OTP_MAX_PER_IP_HOUR per IP",
                 "consumes": [
                     "application/json"
                 ],
@@ -2005,6 +2188,12 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "409": {
@@ -2305,6 +2494,19 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.ForgotPasswordRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "example": "n3w-s3cret-pass"
+                },
+                "phone_number": {
+                    "type": "string",
+                    "example": "+998901234567"
+                }
+            }
+        },
         "rest.InternalServerErrorResponse": {
             "type": "object",
             "properties": {
@@ -2328,6 +2530,19 @@ const docTemplate = `{
                         }
                     ],
                     "example": "Failure"
+                }
+            }
+        },
+        "rest.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "example": "s3cret-pass"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "dilnoza_k"
                 }
             }
         },
@@ -2405,7 +2620,8 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "sign_up",
-                        "update_user"
+                        "update_user",
+                        "reset_password"
                     ],
                     "example": "sign_up"
                 }
@@ -2656,7 +2872,8 @@ const docTemplate = `{
                     "type": "string",
                     "enum": [
                         "sign_up",
-                        "update_user"
+                        "update_user",
+                        "reset_password"
                     ],
                     "example": "sign_up"
                 }

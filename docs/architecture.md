@@ -46,7 +46,7 @@ testable with small fakes.
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
 | `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `activity_recommender`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `token_refresher`, `profile_updater`, `password_resetter` |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `activity_recommender`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `user_login`, `user_logout`, `token_refresher`, `profile_updater`, `password_resetter` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -101,7 +101,7 @@ updater and deleter come grouped in `rest.ActivityEditUseCases`, the per-child o
 `rest.ChildActivityUseCases` (recommender, completion recorder and lister, streak), the user
 use cases in `rest.UserUseCases` (creator, lister, getter, updater, deleter), the OTP ones in
 `rest.OTPUseCases` (sender, verifier) and the auth ones in `rest.AuthUseCases` (sign-up,
-refresher, access token checker). Group the use cases of
+refresher, access token checker, login, logout, forgot password). Group the use cases of
 new resources the same way rather than growing the argument list.
 
 ## Errors
@@ -191,6 +191,13 @@ Sign-up depends on a verified phone number, handed over through Redis rather tha
    call, which signs out every other device. Both delete the mark only after the write.
    `DELETE /v1/me` reuses `user_deleter`; the soft-delete triggers remove `user_auth` and
    orphaned children.
+7. Signing in and out: `user_login` loads `user_auth` by username (`authRepo.GetByUsername`),
+   compares the bcrypt hash (or a dummy hash for an unknown username, so timing does not reveal
+   it), issues a new pair and stores both hashes with `authRepo.SetTokens`, which signs out
+   any other device. `user_logout` calls `SetTokens` with empty hashes (stored as `NULL`), so
+   `token_checker` and `token_refresher` reject the old tokens. Forgot password is
+   `password_resetter.ExecuteByPhone`: it finds the active user by phone (`userRepo.GetByPhone`)
+   and then runs the same steps as `PUT /v1/me/password`.
 
 ## Drivers
 

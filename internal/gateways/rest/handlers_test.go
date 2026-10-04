@@ -101,7 +101,10 @@ func newTestServer(adminKey string) (*Server, *deps) {
 			Password: passwordResetterFunc(d.me.resetPassword),
 			Children: childListerFunc(d.me.listChildren),
 		}, OTPUseCases{Sender: d.otp, Verifier: otpVerifierFunc(d.otp.verify)},
-		AuthUseCases{SignUp: d.auth, Refresher: refresherFunc(d.auth.refresh), Checker: checkerFunc(d.auth.check)}, d.media)
+		AuthUseCases{
+			SignUp: d.auth, Refresher: refresherFunc(d.auth.refresh), Checker: checkerFunc(d.auth.check),
+			Login: loginFunc(d.auth.login), Logout: logoutFunc(d.auth.logout), ForgotPassword: forgotFunc(d.auth.forgot),
+		}, d.media)
 
 	return s, d
 }

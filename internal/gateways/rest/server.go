@@ -165,12 +165,28 @@ type tokenChecker interface {
 	Execute(ctx context.Context, accessToken string) (domain.Principal, error)
 }
 
+type login interface {
+	Execute(ctx context.Context, username, password string) (domain.TokenPair, error)
+}
+
+type logout interface {
+	Execute(ctx context.Context, userID string) error
+}
+
+type passwordForgetter interface {
+	ExecuteByPhone(ctx context.Context, phone, password string) (domain.TokenPair, error)
+}
+
 // AuthUseCases groups the use cases behind the /v1/auth endpoints.
 type AuthUseCases struct {
 	SignUp    signUp
 	Refresher tokenRefresher
 	// Checker authenticates the access token on signed-in endpoints.
 	Checker tokenChecker
+	Login   login
+	Logout  logout
+	// ForgotPassword sets a new password for a signed-out user whose phone passed a reset_password check.
+	ForgotPassword passwordForgetter
 }
 
 // OTPUseCases groups the use cases behind the /v1/otp endpoints.
@@ -215,6 +231,9 @@ type Server struct {
 	signUp         signUp
 	tokenRefresher tokenRefresher
 	tokenChecker   tokenChecker
+	login          login
+	logout         logout
+	forgotPassword passwordForgetter
 
 	// mediaUploader is nil when S3 is not configured; POST /v1/media then answers 503.
 	mediaUploader mediaUploader
@@ -280,6 +299,9 @@ func New(cfg config.Application,
 		signUp:         auth.SignUp,
 		tokenRefresher: auth.Refresher,
 		tokenChecker:   auth.Checker,
+		login:          auth.Login,
+		logout:         auth.Logout,
+		forgotPassword: auth.ForgotPassword,
 		mediaUploader:  media,
 	}
 

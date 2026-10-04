@@ -245,3 +245,10 @@ func (r *userRepo) ExistsByPhone(ctx context.Context, phone string) (bool, error
 
 	return exists, nil
 }
+
+// GetByPhone returns the active user with this phone number, or ErrUserNotFound.
+func (r *userRepo) GetByPhone(ctx context.Context, phone string) (domain.User, error) {
+	l := logger.FromCtx(ctx, "userRepo.GetByPhone")
+
+	return r.one(ctx, l, `SELECT `+userColumns+` FROM users WHERE phone_number = $1 AND deleted_at IS NULL`, phone)
+}

@@ -25,7 +25,7 @@ Every response, success or failure, has the same shape:
 | 0 | 200 | success | |
 | -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
-| -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token |
+| -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; sign-up without a verified phone number or with `user_role: admin`; profile phone change or password reset without the matching OTP verification |
 | -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
@@ -64,12 +64,12 @@ CORS allows any origin.
 ## User authentication
 
 Endpoints for a signed-in parent (`/v1/me...`, `/v1/children` and `/v1/children/{id}...`) need the access
-token from `/v1/auth/signup` or `/v1/auth/refresh`:
+token from `/v1/auth/signup`, `/v1/auth/login`, `/v1/auth/forgot-password` or `/v1/auth/refresh`:
 
 - Send `Authorization: Bearer <access_token>`.
 - The token must be validly signed, of type `access`, not expired (it lives `JWT_ACCESS_TTL`,
-  24 hours by default), and still the latest access token issued to the user (each refresh
-  replaces the stored one, and deleting the user removes it). Otherwise: 401, code -20.
+  24 hours by default), and still the latest access token issued to the user (each refresh,
+  login or password reset replaces the stored one; logout and deleting the user remove it). Otherwise: 401, code -20.
   Refresh the token and retry.
 - A route can be limited to some roles (`user`, `paid_user`, `admin`). The role checked is the
   user's current `user_auth.role`, not the token's `role` claim. A role outside the list: 403,
@@ -232,6 +232,9 @@ On success the password is stored as a bcrypt hash, the mark is deleted, and the
 `expires_in`). Both stored token hashes are replaced, so every token issued before, on any
 device, stops working (401); the app must switch to the new pair.
 
+A signed-out user who forgot their password uses `POST /v1/auth/forgot-password` instead; see
+[Forgot password](#forgot-password).
+
 #### Delete account
 
 `DELETE /v1/me` with no body. Response `data` is `null`. It is the same soft delete as
@@ -379,7 +382,7 @@ Body (all fields required):
 | Field | Rules |
 |---|---|
 | `phone_number` | Uzbek mobile number in E.164: `+998` and 9 digits (422). Play Mobile only delivers in Uzbekistan |
-| `purpose` | `sign_up` (registration), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`PUT /v1/me/password`) (422) |
+| `purpose` | `sign_up` (registration), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`POST /v1/auth/forgot-password` and `PUT /v1/me/password`) (422) |
 | `ip_address` | the end user's IPv4 or IPv6 address, as seen by the app or proxy in front of the API (422) |
 
 Response `data`:
@@ -443,7 +446,8 @@ production. Each use logs a warning `otp verified with the default code`.
 The comparison runs as one Redis script, so two parallel requests cannot both use a code.
 The verified mark is a Redis key (see [data-model.md](data-model.md#redis-keys)) rather than a
 token in the response: `POST /v1/auth/signup` checks it for `sign_up`, `PATCH /v1/me` for
-`update_user` (the new number) and `PUT /v1/me/password` for `reset_password`.
+`update_user` (the new number), and `POST /v1/auth/forgot-password` and `PUT /v1/me/password`
+for `reset_password`.
 
 Examples:
 
@@ -457,18 +461,26 @@ curl -X POST localhost:8080/v1/otp/verify -H 'Content-Type: application/json' \
 
 ### Auth (public)
 
-Sign-up and access token refresh. Tokens are HS256 JWTs signed with `JWT_SECRET`.
+Sign-up, login, logout, forgot password and access token refresh. Tokens are HS256 JWTs signed
+with `JWT_SECRET`.
 
 | Method | Path | Description |
 |---|---|---|
 | POST | `/v1/auth/signup` | create a user whose phone number was verified, return access and refresh tokens |
+| POST | `/v1/auth/login` | sign in with username and password, return a new token pair |
+| POST | `/v1/auth/logout` | sign out: the current tokens stop working (needs the access token) |
+| POST | `/v1/auth/forgot-password` | set a new password for a signed-out user whose phone passed a `reset_password` code, return a new token pair |
 | POST | `/v1/auth/refresh` | trade a refresh token for a new access token |
+
+Only one token pair is valid per user at a time: sign-up, login and password resets store the
+hashes of the pair they return, so the pair held by any other device stops working.
 
 Token claims: `sub` is the user id, `typ` is `access` or `refresh`, `role` is the user's
 `user_auth.role` when the token was issued (`user`, `admin` or `paid_user`), plus `iss`
 (`JWT_ISSUER`), `iat`, `exp` and a unique `jti`. An access token lives `JWT_ACCESS_TTL`
 (24 hours). A refresh token has no `exp` and never expires while `JWT_REFRESH_TTL` is 0, the
-default; it stops working only when the user is deleted or `JWT_SECRET` changes. Set
+default; it stops working only when the user logs out, logs in again, resets the password or is
+deleted, or when `JWT_SECRET` changes. Set
 `JWT_REFRESH_TTL` to a duration to give refresh tokens an expiry again. A token of one type is rejected where
 the other is expected. Endpoints for signed-in users take the access token as
 `Authorization: Bearer <access_token>`; see [User authentication](#user-authentication).
@@ -528,12 +540,74 @@ expired, sign in again`. The new access token's hash replaces `user_auth.access_
 refresh token is not rotated; the client keeps it for good (or until it expires, when
 `JWT_REFRESH_TTL` is set).
 
+#### Login
+
+```json
+{"username": "dilnoza_k", "password": "s3cret-pass"}
+```
+
+Response `data`: a token pair, the same shape as sign-up.
+
+Behaviour (`usecases/user_login`):
+
+| Result | HTTP | error_code | error_note |
+|---|---:|---:|---|
+| `username` or `password` empty | 422 | -10 | `username and password are required` |
+| unknown username, a user without a password, or a wrong password | 401 | -20 | `username or password is wrong` |
+
+- `username` is trimmed and lowercased, like at sign-up.
+- An unknown username still runs a bcrypt comparison, so the answer takes as long as a wrong
+  password and does not tell which usernames exist.
+- There is no login rate limit yet.
+
+#### Logout
+
+`POST /v1/auth/logout` with `Authorization: Bearer <access_token>` and no body. `data` is
+null. Both stored token hashes are cleared, so the access token and the refresh token stop
+working at once (401 afterwards, including on `/v1/auth/refresh`). Because only one pair is
+valid at a time, this signs the user out everywhere. Sign in again with `/v1/auth/login`.
+
+#### Forgot password
+
+For a signed-out user (no access token needed):
+
+1. `POST /v1/otp/send` with purpose `reset_password` and the user's phone number (404 if no
+   active user has it).
+2. `POST /v1/otp/verify` with the code.
+3. Within `OTP_VERIFIED_TTL` (10 min), `POST /v1/auth/forgot-password`:
+
+```json
+{"phone_number": "+998901234567", "password": "n3w-s3cret-pass"}
+```
+
+Response `data`: a new token pair, so the user is signed in.
+
+Behaviour (`usecases/password_resetter`, `ExecuteByPhone`):
+
+| Result | HTTP | error_code | error_note |
+|---|---:|---:|---|
+| `phone_number` not `+998` and 9 digits, or `password` not 8 to 72 bytes | 422 | -10 | which field and why |
+| no active user has the number | 404 | -30 | `phone number does not belong to a user` |
+| no `reset_password` verification for the number | 403 | -21 | `phone number is not verified, verify a reset_password code with /v1/otp/verify first` |
+
+On success the password is stored as a bcrypt hash, the verified mark is deleted, and both
+token hashes are replaced, so every token issued before stops working. It is the same use case
+as `PUT /v1/me/password`, which takes the user from the access token instead of the phone.
+
 ```bash
 curl -X POST localhost:8080/v1/auth/signup -H 'Content-Type: application/json' \
   -d '{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567"}'
 
 curl -X POST localhost:8080/v1/auth/refresh -H 'Content-Type: application/json' \
   -d '{"refresh_token": "eyJ..."}'
+
+curl -X POST localhost:8080/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"username": "dilnoza_k", "password": "s3cret-pass"}'
+
+curl -X POST localhost:8080/v1/auth/logout -H 'Authorization: Bearer eyJ...'
+
+curl -X POST localhost:8080/v1/auth/forgot-password -H 'Content-Type: application/json' \
+  -d '{"phone_number": "+998901234567", "password": "n3w-s3cret-pass"}'
 ```
 
 ### Media (public)

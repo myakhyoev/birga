@@ -41,6 +41,8 @@ import (
 	userdeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_deleter"
 	usergetter "gitlab.com/loyihalar/birga/backend/internal/usecases/user_getter"
 	userlister "gitlab.com/loyihalar/birga/backend/internal/usecases/user_lister"
+	userlogin "gitlab.com/loyihalar/birga/backend/internal/usecases/user_login"
+	userlogout "gitlab.com/loyihalar/birga/backend/internal/usecases/user_logout"
 	usersignup "gitlab.com/loyihalar/birga/backend/internal/usecases/user_signup"
 	userupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/user_updater"
 	"gitlab.com/loyihalar/birga/backend/pkg/metrics"
@@ -242,6 +244,8 @@ type useCases struct {
 	signUp         *usersignup.UseCase
 	tokenRefresher *tokenrefresher.UseCase
 	tokenChecker   *tokenchecker.UseCase
+	login          *userlogin.UseCase
+	logout         *userlogout.UseCase
 
 	// mediaUploader is nil when media uploads are disabled.
 	mediaUploader *mediauploader.UseCase
@@ -293,6 +297,8 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		signUp:         usersignup.New(l.Named("usecase.user_signup"), cache.OTP(), store, store.User(), store.Auth(), jwt),
 		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),
 		tokenChecker:   tokenchecker.New(l.Named("usecase.token_checker"), jwt, store.Auth()),
+		login:          userlogin.New(l.Named("usecase.user_login"), store.Auth(), jwt),
+		logout:         userlogout.New(l.Named("usecase.user_logout"), store.Auth()),
 		passwordResetter: passwordresetter.New(l.Named("usecase.password_resetter"),
 			cache.OTP(), store.User(), store.Auth(), jwt),
 
@@ -349,6 +355,10 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 			SignUp:    ucs.signUp,
 			Refresher: ucs.tokenRefresher,
 			Checker:   ucs.tokenChecker,
+			Login:     ucs.login,
+			Logout:    ucs.logout,
+			// The same use case serves PUT /v1/me/password (signed in) and forgot password (signed out).
+			ForgotPassword: ucs.passwordResetter,
 		},
 		media,
 	)

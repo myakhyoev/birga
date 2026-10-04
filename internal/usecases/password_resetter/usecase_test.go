@@ -37,6 +37,14 @@ func (fakeUsers) Get(_ context.Context, id string) (domain.User, error) {
 	return domain.User{ID: id, PhoneNumber: &p}, nil
 }
 
+func (fakeUsers) GetByPhone(_ context.Context, p string) (domain.User, error) {
+	if p != phone {
+		return domain.User{}, errs.ErrUserNotFound
+	}
+
+	return domain.User{ID: "u1", PhoneNumber: &p}, nil
+}
+
 type fakeAuth struct {
 	set *domain.UserAuth
 }
@@ -103,6 +111,40 @@ func TestExecute_BadPassword(t *testing.T) {
 		a := &fakeAuth{}
 		if _, err := newUC(&fakeVerified{ok: true}, a, &fakeTokens{}).Execute(context.Background(), "u1", p); !errors.Is(err, errs.ErrValidation) || a.set != nil {
 			t.Fatalf("len %d: %v", len(p), err)
+		}
+	}
+}
+
+func TestExecuteByPhone(t *testing.T) {
+	v, a, tk := &fakeVerified{ok: true}, &fakeAuth{}, &fakeTokens{}
+
+	pair, err := newUC(v, a, tk).ExecuteByPhone(context.Background(), " "+phone+" ", "new-pass-123")
+	if err != nil {
+		t.Fatalf("ExecuteByPhone: %v", err)
+	}
+
+	if pair.AccessToken != "access-token" || a.set == nil || a.set.UserID != "u1" ||
+		bcrypt.CompareHashAndPassword([]byte(a.set.PasswordHash), []byte("new-pass-123")) != nil || !v.consumed {
+		t.Fatalf("pair %+v stored %+v consumed %v", pair, a.set, v.consumed)
+	}
+}
+
+func TestExecuteByPhone_Errors(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		verified bool
+		phone    string
+		password string
+		want     error
+	}{
+		{"not verified", false, phone, "new-pass-123", errs.ErrResetNotVerified},
+		{"unknown phone", true, "+998907654321", "new-pass-123", errs.ErrPhoneNumberNotRegistered},
+		{"bad phone", true, "12345", "new-pass-123", errs.ErrValidation},
+		{"short password", true, phone, "short", errs.ErrValidation},
+	} {
+		a := &fakeAuth{}
+		if _, err := newUC(&fakeVerified{ok: tc.verified}, a, &fakeTokens{}).ExecuteByPhone(context.Background(), tc.phone, tc.password); !errors.Is(err, tc.want) || a.set != nil {
+			t.Fatalf("%s: got %v, want %v", tc.name, err, tc.want)
 		}
 	}
 }

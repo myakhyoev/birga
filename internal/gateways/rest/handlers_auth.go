@@ -124,3 +124,107 @@ func (s *Server) RefreshToken() gin.HandlerFunc {
 		Return(c, accessTokenView{AccessToken: access.Token, ExpiresIn: int(access.ExpiresIn.Seconds())}, nil)
 	}
 }
+
+// LoginRequest is the body of POST /v1/auth/login.
+type LoginRequest struct {
+	Username string `json:"username" example:"dilnoza_k"`
+	Password string `json:"password" example:"s3cret-pass"`
+}
+
+// Login godoc swagger
+// @Summary signs a user in with username and password
+// @Description - username is case-insensitive; username and password are required (422)
+// @Description - unknown username or wrong password: 401 with the same message, so it does not tell
+// @Description   which usernames exist
+// @Description - returns a new token pair, like sign-up. Only the newest pair is valid, so signing in
+// @Description   signs out every other device
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body LoginRequest true "credentials"
+// @Success 200 {object} rest.R{data=rest.tokenPairView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/auth/login [POST]
+func (s *Server) Login() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req LoginRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Return(c, nil, errs.Errf(errs.ErrBadRequest, "invalid JSON body: %s", err.Error()))
+
+			return
+		}
+
+		pair, err := s.login.Execute(c.Request.Context(), req.Username, req.Password)
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, toTokenPairView(pair), nil)
+	}
+}
+
+// Logout godoc swagger
+// @Summary signs the user out
+// @Description - the access token used here and the refresh token stop working at once (401 afterwards);
+// @Description   sign in again with POST /v1/auth/login
+// @Tags auth
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} rest.R
+// @Failure 401 {object} rest.UnauthorizedResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/auth/logout [POST]
+func (s *Server) Logout() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		Return(c, nil, s.logout.Execute(c.Request.Context(), currentUserID(c)))
+	}
+}
+
+// ForgotPasswordRequest is the body of POST /v1/auth/forgot-password.
+type ForgotPasswordRequest struct {
+	PhoneNumber string `json:"phone_number" example:"+998901234567"`
+	Password    string `json:"password" example:"n3w-s3cret-pass"`
+}
+
+// ForgotPassword godoc swagger
+// @Summary sets a new password for a signed-out user, confirmed by an SMS code
+// @Description - first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the
+// @Description   user's phone number; without that verification: 403. A successful reset uses it up
+// @Description - phone_number: +998 and 9 digits; password: 8 to 72 bytes, stored as a bcrypt hash (422)
+// @Description - no user has this phone number: 404
+// @Description - returns a new token pair (the user is signed in); every token issued before stops working
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param body body ForgotPasswordRequest true "phone number and new password"
+// @Success 200 {object} rest.R{data=rest.tokenPairView}
+// @Failure 400 {object} rest.BadRequestResponse
+// @Failure 403 {object} rest.ForbiddenResponse
+// @Failure 404 {object} rest.NotFoundResponse
+// @Failure 422 {object} rest.UnprocessableContentResponse
+// @Failure 500 {object} rest.InternalServerErrorResponse
+// @Router /v1/auth/forgot-password [POST]
+func (s *Server) ForgotPassword() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req ForgotPasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			Return(c, nil, errs.Errf(errs.ErrBadRequest, "invalid JSON body: %s", err.Error()))
+
+			return
+		}
+
+		pair, err := s.forgotPassword.ExecuteByPhone(c.Request.Context(), req.PhoneNumber, req.Password)
+		if err != nil {
+			Return(c, nil, err)
+
+			return
+		}
+
+		Return(c, toTokenPairView(pair), nil)
+	}
+}

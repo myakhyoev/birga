@@ -10,7 +10,7 @@ import (
 // SendOTPRequest is the body of POST /v1/otp/send.
 type SendOTPRequest struct {
 	PhoneNumber string `json:"phone_number" example:"+998901234567"`
-	Purpose     string `json:"purpose" enums:"sign_up,update_user" example:"sign_up"`
+	Purpose     string `json:"purpose" enums:"sign_up,update_user,reset_password" example:"sign_up"`
 	IPAddress   string `json:"ip_address" example:"203.0.113.7"`
 }
 
@@ -22,7 +22,9 @@ type sendOTPView struct {
 // SendOTP godoc swagger
 // @Summary sends a one-time code by SMS
 // @Description - phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)
-// @Description - purpose: sign_up (the number must not belong to a user, 409 otherwise) or update_user
+// @Description - purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or
+// @Description   reset_password (the number must belong to a user, 404 otherwise; used by forgot password and
+// @Description   PUT /v1/me/password)
 // @Description - ip_address: the end user's IPv4 or IPv6 address, used for rate limits
 // @Description - the code has 6 digits and is sent through Play Mobile; only its hash is stored
 // @Description - the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new
@@ -35,6 +37,7 @@ type sendOTPView struct {
 // @Param body body SendOTPRequest true "where and why to send the code"
 // @Success 200 {object} rest.R{data=rest.sendOTPView}
 // @Failure 400 {object} rest.BadRequestResponse
+// @Failure 404 {object} rest.NotFoundResponse
 // @Failure 409 {object} rest.ConflictResponse
 // @Failure 422 {object} rest.UnprocessableContentResponse
 // @Failure 429 {object} rest.TooManyRequestsResponse
@@ -67,7 +70,7 @@ func (s *Server) SendOTP() gin.HandlerFunc {
 // VerifyOTPRequest is the body of POST /v1/otp/verify.
 type VerifyOTPRequest struct {
 	PhoneNumber string `json:"phone_number" example:"+998901234567"`
-	Purpose     string `json:"purpose" enums:"sign_up,update_user" example:"sign_up"`
+	Purpose     string `json:"purpose" enums:"sign_up,update_user,reset_password" example:"sign_up"`
 	Code        string `json:"code" example:"480569"`
 }
 

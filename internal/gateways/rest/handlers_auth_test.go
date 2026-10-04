@@ -13,7 +13,44 @@ import (
 type fakeAuth struct {
 	got        domain.SignUpRequest
 	gotRefresh string
+	gotLogin   [2]string
+	gotLogout  string
+	gotForgot  [2]string
 	err        error
+}
+
+func (f *fakeAuth) login(username, password string) (domain.TokenPair, error) {
+	f.gotLogin = [2]string{username, password}
+
+	return domain.TokenPair{AccessToken: "a", RefreshToken: "r", AccessExpiresIn: 15 * time.Minute}, f.err
+}
+
+func (f *fakeAuth) logout(userID string) error {
+	f.gotLogout = userID
+
+	return f.err
+}
+
+func (f *fakeAuth) forgot(phone, password string) (domain.TokenPair, error) {
+	f.gotForgot = [2]string{phone, password}
+
+	return domain.TokenPair{AccessToken: "a", RefreshToken: "r", AccessExpiresIn: 15 * time.Minute}, f.err
+}
+
+type loginFunc func(string, string) (domain.TokenPair, error)
+
+func (fn loginFunc) Execute(_ context.Context, username, password string) (domain.TokenPair, error) {
+	return fn(username, password)
+}
+
+type logoutFunc func(string) error
+
+func (fn logoutFunc) Execute(_ context.Context, userID string) error { return fn(userID) }
+
+type forgotFunc func(string, string) (domain.TokenPair, error)
+
+func (fn forgotFunc) ExecuteByPhone(_ context.Context, phone, password string) (domain.TokenPair, error) {
+	return fn(phone, password)
 }
 
 func (f *fakeAuth) Execute(_ context.Context, req domain.SignUpRequest) (domain.TokenPair, error) {
@@ -99,5 +136,64 @@ func TestRefreshToken(t *testing.T) {
 
 	if code, r := do(t, s, http.MethodPost, "/v1/auth/refresh", `{"refresh_token": "x"}`, nil); code != http.StatusUnauthorized || r.ErrorCode != _errCodeUnauthorized {
 		t.Fatalf("invalid: %d %+v", code, r)
+	}
+}
+
+func TestLogin(t *testing.T) {
+	s, d := newTestServer("")
+
+	code, r := do(t, s, http.MethodPost, "/v1/auth/login", `{"username": "dilnoza_k", "password": "s3cret-pass"}`, nil)
+	if code != http.StatusOK || d.auth.gotLogin != [2]string{"dilnoza_k", "s3cret-pass"} {
+		t.Fatalf("got %d %+v, login %v", code, r, d.auth.gotLogin)
+	}
+
+	if data, _ := r.Data.(map[string]any); data["access_token"] != "a" || data["refresh_token"] != "r" || data["expires_in"] != float64(900) {
+		t.Fatalf("unexpected data: %+v", r.Data)
+	}
+
+	d.auth.err = errs.ErrInvalidCredentials
+
+	if code, r := do(t, s, http.MethodPost, "/v1/auth/login", `{"username": "x", "password": "y"}`, nil); code != http.StatusUnauthorized || r.ErrorCode != _errCodeUnauthorized {
+		t.Fatalf("wrong password: %d %+v", code, r)
+	}
+
+	if code, _ := do(t, s, http.MethodPost, "/v1/auth/login", `{`, nil); code != http.StatusBadRequest {
+		t.Fatalf("bad JSON: %d", code)
+	}
+}
+
+func TestLogout(t *testing.T) {
+	s, d := newTestServer("")
+
+	if code, _ := do(t, s, http.MethodPost, "/v1/auth/logout", "", nil); code != http.StatusUnauthorized || d.auth.gotLogout != "" {
+		t.Fatalf("no token: %d", code)
+	}
+
+	code, r := do(t, s, http.MethodPost, "/v1/auth/logout", "", map[string]string{"Authorization": "Bearer good"})
+	if code != http.StatusOK || d.auth.gotLogout != testUserID {
+		t.Fatalf("got %d %+v, logout %q", code, r, d.auth.gotLogout)
+	}
+}
+
+func TestForgotPassword(t *testing.T) {
+	s, d := newTestServer("")
+
+	code, r := do(t, s, http.MethodPost, "/v1/auth/forgot-password", `{"phone_number": "+998901234567", "password": "n3w-s3cret-pass"}`, nil)
+	if code != http.StatusOK || d.auth.gotForgot != [2]string{"+998901234567", "n3w-s3cret-pass"} {
+		t.Fatalf("got %d %+v, forgot %v", code, r, d.auth.gotForgot)
+	}
+
+	if data, _ := r.Data.(map[string]any); data["access_token"] != "a" {
+		t.Fatalf("unexpected data: %+v", r.Data)
+	}
+
+	for err, want := range map[error]int{
+		errs.ErrResetNotVerified:         http.StatusForbidden,
+		errs.ErrPhoneNumberNotRegistered: http.StatusNotFound,
+	} {
+		d.auth.err = err
+		if code, _ := do(t, s, http.MethodPost, "/v1/auth/forgot-password", `{}`, nil); code != want {
+			t.Fatalf("%v: got %d, want %d", err, code, want)
+		}
 	}
 }

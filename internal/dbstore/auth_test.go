@@ -70,3 +70,66 @@ func TestAuthRepo(t *testing.T) {
 		}
 	})
 }
+
+func TestAuthRepo_LoginLogout(t *testing.T) {
+	s := newTestStore(t)
+
+	inRollbackTx(t, s, func(ctx context.Context) {
+		u, err := s.User().Create(ctx, domain.User{Username: strPtr("login_test"), PhoneNumber: strPtr("+998900000012")})
+		if err != nil {
+			t.Fatalf("Create user: %v", err)
+		}
+
+		if err := s.Auth().Create(ctx, domain.UserAuth{UserID: u.ID, Username: "login_test", PasswordHash: "bcrypt", Role: domain.UserRoleUser}); err != nil {
+			t.Fatalf("Create auth: %v", err)
+		}
+
+		if got, err := s.Auth().GetByUsername(ctx, "login_test"); err != nil || got.UserID != u.ID || got.PasswordHash != "bcrypt" {
+			t.Fatalf("GetByUsername = %+v, %v", got, err)
+		}
+
+		if got, err := s.User().GetByPhone(ctx, "+998900000012"); err != nil || got.ID != u.ID {
+			t.Fatalf("GetByPhone = %+v, %v", got, err)
+		}
+
+		if err := s.Auth().SetTokens(ctx, u.ID, "a5", "r5"); err != nil {
+			t.Fatalf("SetTokens: %v", err)
+		}
+
+		if got, _ := s.Auth().Get(ctx, u.ID); got.AccessTokenHash != "a5" || got.RefreshTokenHash != "r5" || got.PasswordHash != "bcrypt" {
+			t.Fatalf("after SetTokens: %+v", got)
+		}
+
+		// Clearing the tokens (logout) stores NULLs.
+		if err := s.Auth().SetTokens(ctx, u.ID, "", ""); err != nil {
+			t.Fatalf("SetTokens clear: %v", err)
+		}
+
+		if got, _ := s.Auth().Get(ctx, u.ID); got.AccessTokenHash != "" || got.RefreshTokenHash != "" {
+			t.Fatalf("after clearing tokens: %+v", got)
+		}
+
+		checkGoneAfterDelete(ctx, t, s, u.ID)
+	})
+}
+
+// checkGoneAfterDelete soft-deletes the user and checks that login lookups no longer find them.
+func checkGoneAfterDelete(ctx context.Context, t *testing.T, s *DBStore, userID string) {
+	t.Helper()
+
+	if err := s.User().Delete(ctx, userID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if err := s.Auth().SetTokens(ctx, userID, "", ""); !errors.Is(err, errs.ErrUserNotFound) {
+		t.Fatalf("SetTokens after delete: %v", err)
+	}
+
+	if _, err := s.User().GetByPhone(ctx, "+998900000012"); !errors.Is(err, errs.ErrUserNotFound) {
+		t.Fatalf("GetByPhone after delete: %v", err)
+	}
+
+	if _, err := s.Auth().GetByUsername(ctx, "login_test"); !errors.Is(err, errs.ErrUserNotFound) {
+		t.Fatalf("GetByUsername after delete: %v", err)
+	}
+}

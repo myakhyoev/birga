@@ -141,6 +141,15 @@ definitions:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
     type: object
+  rest.ForgotPasswordRequest:
+    properties:
+      password:
+        example: n3w-s3cret-pass
+        type: string
+      phone_number:
+        example: "+998901234567"
+        type: string
+    type: object
   rest.InternalServerErrorResponse:
     properties:
       data: {}
@@ -155,6 +164,15 @@ definitions:
         allOf:
         - $ref: '#/definitions/rest.statusType'
         example: Failure
+    type: object
+  rest.LoginRequest:
+    properties:
+      password:
+        example: s3cret-pass
+        type: string
+      username:
+        example: dilnoza_k
+        type: string
     type: object
   rest.NotFoundResponse:
     properties:
@@ -205,6 +223,7 @@ definitions:
         enum:
         - sign_up
         - update_user
+        - reset_password
         example: sign_up
         type: string
     type: object
@@ -375,6 +394,7 @@ definitions:
         enum:
         - sign_up
         - update_user
+        - reset_password
         example: sign_up
         type: string
     type: object
@@ -1293,6 +1313,131 @@ paths:
       summary: updates a user partially
       tags:
       - admin
+  /v1/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - first POST /v1/otp/send and /v1/otp/verify with purpose reset_password for the
+        user's phone number; without that verification: 403. A successful reset uses it up
+        - phone_number: +998 and 9 digits; password: 8 to 72 bytes, stored as a bcrypt hash (422)
+        - no user has this phone number: 404
+        - returns a new token pair (the user is signed in); every token issued before stops working
+      parameters:
+      - description: phone number and new password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.tokenPairView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      summary: sets a new password for a signed-out user, confirmed by an SMS code
+      tags:
+      - auth
+  /v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - username is case-insensitive; username and password are required (422)
+        - unknown username or wrong password: 401 with the same message, so it does not tell
+        which usernames exist
+        - returns a new token pair, like sign-up. Only the newest pair is valid, so signing in
+        signs out every other device
+      parameters:
+      - description: credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.tokenPairView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      summary: signs a user in with username and password
+      tags:
+      - auth
+  /v1/auth/logout:
+    post:
+      description: |-
+        - the access token used here and the refresh token stop working at once (401 afterwards);
+        sign in again with POST /v1/auth/login
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: signs the user out
+      tags:
+      - auth
   /v1/auth/refresh:
     post:
       consumes:
@@ -1976,7 +2121,9 @@ paths:
       - application/json
       description: |-
         - phone_number: an Uzbek mobile number in E.164, +998 and 9 digits (422 otherwise)
-        - purpose: sign_up (the number must not belong to a user, 409 otherwise) or update_user
+        - purpose: sign_up (the number must not belong to a user, 409 otherwise), update_user, or
+        reset_password (the number must belong to a user, 404 otherwise; used by forgot password and
+        PUT /v1/me/password)
         - ip_address: the end user's IPv4 or IPv6 address, used for rate limits
         - the code has 6 digits and is sent through Play Mobile; only its hash is stored
         - the code is kept in Redis for expires_in seconds (OTP_TTL, default 2 minutes); a new
@@ -2006,6 +2153,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/rest.BadRequestResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
         "409":
           description: Conflict
           schema:
