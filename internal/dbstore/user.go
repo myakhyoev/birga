@@ -27,26 +27,33 @@ type userRepo struct {
 }
 
 type dbUser struct {
-	ID          string    `db:"id"`
-	Name        *string   `db:"name"`
-	Username    *string   `db:"username"`
-	PhoneNumber *string   `db:"phone_number"`
-	PhotoID     *string   `db:"photo_id"`
-	CreatedAt   time.Time `db:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at"`
+	ID           string    `db:"id"`
+	Name         *string   `db:"name"`
+	Username     *string   `db:"username"`
+	PhoneNumber  *string   `db:"phone_number"`
+	PhotoID      *string   `db:"photo_id"`
+	Relationship *string   `db:"relationship"`
+	GoalIDs      []string  `db:"goal_ids"`
+	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
 }
 
-const userColumns = `id, name, username, phone_number, photo_id, created_at, updated_at`
+const userColumns = `id, name, username, phone_number, photo_id, relationship, goal_ids, created_at, updated_at`
 
 func (r *userRepo) Create(ctx context.Context, u domain.User) (domain.User, error) {
 	l := logger.FromCtx(ctx, "userRepo.Create")
 
 	q := `
-		INSERT INTO users (name, username, phone_number, photo_id)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (name, username, phone_number, photo_id, relationship, goal_ids)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING ` + userColumns
 
-	return r.one(ctx, l, q, u.Name, u.Username, u.PhoneNumber, u.PhotoID)
+	goalIDs := u.GoalIDs
+	if goalIDs == nil {
+		goalIDs = []string{}
+	}
+
+	return r.one(ctx, l, q, u.Name, u.Username, u.PhoneNumber, u.PhotoID, u.Relationship, goalIDs)
 }
 
 func (r *userRepo) Get(ctx context.Context, id string) (domain.User, error) {
@@ -220,13 +227,15 @@ func userConflict(err error) error {
 
 func (u dbUser) toDomain() domain.User {
 	return domain.User{
-		ID:          u.ID,
-		Name:        u.Name,
-		Username:    u.Username,
-		PhoneNumber: u.PhoneNumber,
-		PhotoID:     u.PhotoID,
-		CreatedAt:   u.CreatedAt,
-		UpdatedAt:   u.UpdatedAt,
+		ID:           u.ID,
+		Name:         u.Name,
+		Username:     u.Username,
+		PhoneNumber:  u.PhoneNumber,
+		PhotoID:      u.PhotoID,
+		Relationship: u.Relationship,
+		GoalIDs:      u.GoalIDs,
+		CreatedAt:    u.CreatedAt,
+		UpdatedAt:    u.UpdatedAt,
 	}
 }
 

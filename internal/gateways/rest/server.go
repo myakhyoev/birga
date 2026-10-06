@@ -57,6 +57,35 @@ type ActivityEditUseCases struct {
 	Deleter activityDeleter
 }
 
+type goalCreator interface {
+	Execute(ctx context.Context, g domain.Goal) (domain.Goal, error)
+}
+
+type goalLister interface {
+	Execute(ctx context.Context) ([]domain.Goal, error)
+}
+
+type goalGetter interface {
+	Execute(ctx context.Context, id string) (domain.Goal, error)
+}
+
+type goalUpdater interface {
+	Execute(ctx context.Context, id string, upd domain.GoalUpdate) (domain.Goal, error)
+}
+
+type goalDeleter interface {
+	Execute(ctx context.Context, id string) error
+}
+
+// GoalUseCases groups the use cases behind /v1/goals and /v1/admin/goals.
+type GoalUseCases struct {
+	Creator goalCreator
+	Lister  goalLister
+	Getter  goalGetter
+	Updater goalUpdater
+	Deleter goalDeleter
+}
+
 type activityRecommender interface {
 	Execute(ctx context.Context, req activityrecommender.Request) (domain.Activity, error)
 }
@@ -208,6 +237,12 @@ type Server struct {
 	activityUpdater activityUpdater
 	activityDeleter activityDeleter
 
+	goalCreator goalCreator
+	goalLister  goalLister
+	goalGetter  goalGetter
+	goalUpdater goalUpdater
+	goalDeleter goalDeleter
+
 	childCreator        childCreator
 	childGetter         childGetter
 	activityRecommender activityRecommender
@@ -246,6 +281,7 @@ func New(cfg config.Application,
 	activityLister activityLister,
 	activityGetter activityGetter,
 	activityEdit ActivityEditUseCases,
+	goals GoalUseCases,
 	childActivities ChildActivityUseCases,
 	users UserUseCases,
 	me MeUseCases,
@@ -276,6 +312,12 @@ func New(cfg config.Application,
 		activityGetter:  activityGetter,
 		activityUpdater: activityEdit.Updater,
 		activityDeleter: activityEdit.Deleter,
+
+		goalCreator: goals.Creator,
+		goalLister:  goals.Lister,
+		goalGetter:  goals.Getter,
+		goalUpdater: goals.Updater,
+		goalDeleter: goals.Deleter,
 
 		childCreator:        childActivities.Creator,
 		childGetter:         childActivities.Getter,

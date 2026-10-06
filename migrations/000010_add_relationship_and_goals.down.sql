@@ -1,0 +1,4 @@
+ALTER TABLE users DROP COLUMN IF EXISTS goal_ids;
+DROP TABLE IF EXISTS goals;
+ALTER TABLE users DROP COLUMN IF EXISTS relationship;
+DROP TYPE IF EXISTS user_relationship;

@@ -29,6 +29,11 @@ import (
 	childlister "gitlab.com/loyihalar/birga/backend/internal/usecases/child_lister"
 	completionlister "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_lister"
 	completionrecorder "gitlab.com/loyihalar/birga/backend/internal/usecases/completion_recorder"
+	goalcreator "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_creator"
+	goaldeleter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_deleter"
+	goalgetter "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_getter"
+	goallister "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_lister"
+	goalupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_updater"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
@@ -221,6 +226,12 @@ type useCases struct {
 	activityUpdater *activityupdater.UseCase
 	activityDeleter *activitydeleter.UseCase
 
+	goalCreator *goalcreator.UseCase
+	goalLister  *goallister.UseCase
+	goalGetter  *goalgetter.UseCase
+	goalUpdater *goalupdater.UseCase
+	goalDeleter *goaldeleter.UseCase
+
 	childCreator        *childcreator.UseCase
 	childGetter         *childgetter.UseCase
 	childLister         *childlister.UseCase
@@ -274,6 +285,12 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		activityUpdater: activityupdater.New(l.Named("usecase.activity_updater"), store.Activity()),
 		activityDeleter: activitydeleter.New(l.Named("usecase.activity_deleter"), store.Activity()),
 
+		goalCreator: goalcreator.New(l.Named("usecase.goal_creator"), store.Goal()),
+		goalLister:  goallister.New(l.Named("usecase.goal_lister"), store.Goal()),
+		goalGetter:  goalgetter.New(l.Named("usecase.goal_getter"), store.Goal()),
+		goalUpdater: goalupdater.New(l.Named("usecase.goal_updater"), store.Goal()),
+		goalDeleter: goaldeleter.New(l.Named("usecase.goal_deleter"), store.Goal()),
+
 		childCreator:        childcreator.New(l.Named("usecase.child_creator"), store, store.Child()),
 		childGetter:         childgetter.New(l.Named("usecase.child_getter"), store.Child()),
 		childLister:         childlister.New(l.Named("usecase.child_lister"), store.Child()),
@@ -294,7 +311,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), checkOTPDefaultCode(l, cfg), cache.OTP()),
 
-		signUp:         usersignup.New(l.Named("usecase.user_signup"), store, store.User(), store.Auth(), jwt),
+		signUp:         usersignup.New(l.Named("usecase.user_signup"), store, store.User(), store.Goal(), store.Auth(), jwt),
 		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),
 		tokenChecker:   tokenchecker.New(l.Named("usecase.token_checker"), jwt, store.Auth()),
 		login:          userlogin.New(l.Named("usecase.user_login"), store.Auth(), jwt),
@@ -326,6 +343,13 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 		rest.ActivityEditUseCases{
 			Updater: ucs.activityUpdater,
 			Deleter: ucs.activityDeleter,
+		},
+		rest.GoalUseCases{
+			Creator: ucs.goalCreator,
+			Lister:  ucs.goalLister,
+			Getter:  ucs.goalGetter,
+			Updater: ucs.goalUpdater,
+			Deleter: ucs.goalDeleter,
 		},
 		rest.ChildActivityUseCases{
 			Creator:     ucs.childCreator,

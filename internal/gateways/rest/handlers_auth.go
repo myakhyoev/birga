@@ -13,6 +13,9 @@ type SignUpRequest struct {
 	Username    string `json:"username" example:"dilnoza_k"`
 	Password    string `json:"password" example:"s3cret-pass"`
 	PhoneNumber string `json:"phone_number" example:"+998901234567"`
+	// Relationship is who the user is to the children.
+	Relationship string   `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
+	Goals        []string `json:"goals" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"` // goal ids from GET /v1/goals, optional
 }
 
 type tokenPairView struct {
@@ -27,6 +30,9 @@ type tokenPairView struct {
 // @Description   unverified_user (stored in user_auth.role and written into the tokens as the role claim)
 // @Description - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
 // @Description   password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
+// @Description - relationship is required: father, mother, educator or nanny (422)
+// @Description - goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;
+// @Description   an id that is not an active goal: 422
 // @Description - no profile photo here: set photo_id later with PATCH /v1/me
 // @Description - username or phone number already used: 409
 // @Description - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
@@ -51,10 +57,12 @@ func (s *Server) SignUp() gin.HandlerFunc {
 		}
 
 		pair, err := s.signUp.Execute(c.Request.Context(), domain.SignUpRequest{
-			Name:        req.Name,
-			Username:    req.Username,
-			Password:    req.Password,
-			PhoneNumber: req.PhoneNumber,
+			Name:         req.Name,
+			Username:     req.Username,
+			Password:     req.Password,
+			PhoneNumber:  req.PhoneNumber,
+			Relationship: req.Relationship,
+			GoalIDs:      req.Goals,
 		})
 		if err != nil {
 			Return(c, nil, err)

@@ -42,6 +42,10 @@ type SignUpRequest struct {
 	Username    string
 	Password    string
 	PhoneNumber string
+	// Relationship is required, one of the Relationship* values.
+	Relationship string
+	// GoalIDs are optional ids of active goals.
+	GoalIDs []string
 }
 
 // TokenPair is what a client keeps after signing up. AccessExpiresIn is the access token lifetime.

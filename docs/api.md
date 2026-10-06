@@ -184,6 +184,49 @@ Delete sets `deleted_at`. The activity then disappears from every list, get and
 recommendation, and a second delete is 404. Completions that point at it are kept, so a
 child's history and streak do not change. There is no undelete endpoint.
 
+### Goals
+
+Development goals a user picks at sign-up (for example "Speech development"), named in Uzbek,
+Russian and English. Not the same as an activity's `goal` key above, which is a fixed list.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/v1/goals` | none | every active goal, oldest first, not paginated |
+| GET | `/v1/goals/{id}` | none | one goal; a deleted one is 404 |
+| POST | `/v1/admin/goals` | [admin](#admin-authentication) | create a goal |
+| PATCH | `/v1/admin/goals/{id}` | admin | rename a goal |
+| DELETE | `/v1/admin/goals/{id}` | admin | soft-delete a goal |
+
+Reading is open without a token because the app shows the list on the sign-up screen, before
+the user has one. List response `data`: `{"items": [goal, ...], "total": 6}`; see
+[Goal object](#goal-object).
+
+Create body:
+
+```json
+{"name_uz": "Nutqni rivojlantirish", "name_ru": "Развитие речи", "name_en": "Speech development"}
+```
+
+Validation (`usecases/goal_creator`, `usecases/goal_updater`):
+
+| Result | HTTP | error_code |
+|---|---:|---:|
+| a name missing, blank, or over 100 characters (names are trimmed) | 422 | -10 |
+| a name already used by another active goal in the same language, ignoring case | 409 | -40 |
+| PATCH with no field (`nothing to update`) | 422 | -10 |
+
+PATCH takes the same fields, all optional; omitted or `null` fields are kept.
+
+Delete sets `deleted_at`: the goal leaves `/v1/goals`, sign-up refuses its id, and its id is
+removed from every user's `goal_ids` in the same statement. Its names can be used again. A
+second delete is 404; there is no undelete.
+
+```bash
+curl -X POST localhost:8080/v1/admin/goals \
+  -H 'X-Admin-Key: change-me' -H 'Content-Type: application/json' \
+  -d '{"name_uz":"Nutqni rivojlantirish","name_ru":"Развитие речи","name_en":"Speech development"}'
+```
+
 ### Profile (signed in)
 
 The signed-in user's own account, for the app's profile page. All of these need
@@ -491,7 +534,14 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 [`PATCH /v1/me`](#edit-profile).
 
 ```json
-{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567"}
+{
+  "name": "Dilnoza",
+  "username": "dilnoza_k",
+  "password": "s3cret-pass",
+  "phone_number": "+998901234567",
+  "relationship": "mother",
+  "goals": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"]
+}
 ```
 
 | Field | Rules |
@@ -500,6 +550,8 @@ One call, no OTP step: the phone number is not verified, so every new user gets 
 | `username` | 3 to 32 of `a-z`, `0-9`, `_`, `.`; trimmed and lowercased |
 | `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
 | `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
+| `relationship` | required: `father`, `mother`, `educator` or `nanny` (trimmed, case-insensitive) |
+| `goals` | optional, up to 20 goal ids from [`GET /v1/goals`](#goals); repeats are stored once; every id must be an active goal |
 
 Any other field (for example an old client's `user_role` or `photo_id`) is ignored.
 
@@ -516,9 +568,10 @@ Behaviour (`usecases/user_signup`):
 | Result | HTTP | error_code | error_note |
 |---|---:|---:|---|
 | invalid field | 422 | -10 | which field and why |
+| a `goals` id that is not an active goal | 422 | -10 | `goals contains ids that are not active goals, ...` |
 | username or phone number belongs to an active user | 409 | -40 | `username is already taken` / `phone number is already taken` |
 
-- The `users` row (name, username, phone; `photo_id` NULL) and the `user_auth` row (username,
+- The `users` row (name, username, phone, relationship, `goal_ids`; `photo_id` NULL) and the `user_auth` row (username,
   bcrypt password, role `unverified_user`, SHA-256 hashes of both tokens) are written in one transaction.
 - The access and refresh tokens carry `role: unverified_user`. That role may use `/v1/me...`,
   `POST /v1/children` and `/v1/children/{id}...` like `user`; nothing promotes it yet.
@@ -744,9 +797,21 @@ curl -X PATCH localhost:8080/v1/admin/users/7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
 | `username` | string or `null` | lowercase |
 | `phone_number` | string or `null` | E.164; always set for users created through the API |
 | `photo_id` | UUID string or `null` | profile photo, a media id from `POST /v1/media` |
+| `relationship` | string or `null` | `father`, `mother`, `educator` or `nanny`; `null` for users created before sign-up asked for it, or by an admin |
+| `goal_ids` | array of UUID strings | goals picked at sign-up, always an array (may be empty); see [Goals](#goals) |
 | `created_at`, `updated_at` | RFC 3339 timestamp | `updated_at` changes on every update and on delete |
 
 `deleted_at` is never returned: deleted users are not returned at all.
+
+### Goal object
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | UUID string | generated by the database |
+| `name_uz`, `name_ru`, `name_en` | string | each unique among active goals in its language, ignoring case |
+| `created_at`, `updated_at` | RFC 3339 timestamp | |
+
+Deleted goals are never returned, so `deleted_at` is not part of the object.
 
 ### Activity object
 

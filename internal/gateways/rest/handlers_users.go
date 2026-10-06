@@ -217,13 +217,16 @@ func (s *Server) DeleteUser() gin.HandlerFunc {
 }
 
 type userView struct {
-	ID          string    `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
-	Name        *string   `json:"name" example:"Dilnoza"`
-	Username    *string   `json:"username" example:"dilnoza_95"`
-	PhoneNumber *string   `json:"phone_number" example:"+998901234567"`
-	PhotoID     *string   `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          string  `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
+	Name        *string `json:"name" example:"Dilnoza"`
+	Username    *string `json:"username" example:"dilnoza_95"`
+	PhoneNumber *string `json:"phone_number" example:"+998901234567"`
+	PhotoID     *string `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	// Relationship is null for users created before sign-up asked for it, or by an admin.
+	Relationship *string   `json:"relationship" example:"mother" enums:"father,mother,educator,nanny"`
+	GoalIDs      []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type userListView struct {
@@ -235,12 +238,14 @@ type userListView struct {
 
 func toUserView(u domain.User) userView {
 	return userView{
-		ID:          u.ID,
-		Name:        u.Name,
-		Username:    u.Username,
-		PhoneNumber: u.PhoneNumber,
-		PhotoID:     u.PhotoID,
-		CreatedAt:   u.CreatedAt,
-		UpdatedAt:   u.UpdatedAt,
+		ID:           u.ID,
+		Name:         u.Name,
+		Username:     u.Username,
+		PhoneNumber:  u.PhoneNumber,
+		PhotoID:      u.PhotoID,
+		Relationship: u.Relationship,
+		GoalIDs:      u.GoalIDs,
+		CreatedAt:    u.CreatedAt,
+		UpdatedAt:    u.UpdatedAt,
 	}
 }

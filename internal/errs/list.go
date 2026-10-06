@@ -21,6 +21,10 @@ var (
 
 	ErrChildNotFound = Errf(ErrNotFound, "child not found")
 
+	ErrGoalNotFound  = Errf(ErrNotFound, "goal not found")
+	ErrGoalNameTaken = Errf(ErrConflict, "a goal with this name already exists")
+	ErrUnknownGoals  = Errf(ErrValidation, "goals contains ids that are not active goals, list them with GET /v1/goals")
+
 	ErrPhoneNumberRegistered    = Errf(ErrConflict, "phone number is already registered")
 	ErrPhoneNumberNotRegistered = Errf(ErrNotFound, "phone number does not belong to a user")
 	ErrOTPNotFound              = Errf(ErrNotFound, "code expired or was not requested, request a new one")

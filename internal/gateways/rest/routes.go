@@ -18,6 +18,10 @@ func (s *Server) endpoints() {
 		v1.GET("/activities", s.ListActivities())
 		v1.GET("/activities/:id", s.GetActivity())
 
+		// Open without a token: the app shows the goals on the sign-up screen.
+		v1.GET("/goals", s.ListGoals())
+		v1.GET("/goals/:id", s.GetGoal())
+
 		v1.POST("/otp/send", s.SendOTP())
 		v1.POST("/otp/verify", s.VerifyOTP())
 
@@ -32,7 +36,9 @@ func (s *Server) endpoints() {
 	v1.POST("/auth/logout", s.userAuth(), s.Logout())
 
 	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
-	v1.POST("/children", s.userAuth(domain.UserRoleUnverifiedUser, domain.UserRoleUser, domain.UserRolePaidUser, domain.UserRoleAdmin), s.CreateChild())
+	v1.POST("/children",
+		s.userAuth(domain.UserRoleUnverifiedUser, domain.UserRoleUser, domain.UserRolePaidUser, domain.UserRoleAdmin),
+		s.CreateChild())
 
 	// The signed-in user's own account. Every role may use it.
 	me := v1.Group("/me", s.userAuth())
@@ -60,6 +66,10 @@ func (s *Server) endpoints() {
 		admin.GET("/activities/:id", s.AdminGetActivity())
 		admin.PATCH("/activities/:id", s.UpdateActivity())
 		admin.DELETE("/activities/:id", s.DeleteActivity())
+
+		admin.POST("/goals", s.CreateGoal())
+		admin.PATCH("/goals/:id", s.UpdateGoal())
+		admin.DELETE("/goals/:id", s.DeleteGoal())
 
 		admin.POST("/users", s.CreateUser())
 		admin.GET("/users", s.ListUsers())

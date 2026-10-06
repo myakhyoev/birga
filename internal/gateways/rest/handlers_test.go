@@ -74,15 +74,23 @@ type deps struct {
 	edit    *fakeActivityEdit
 	kids    *fakeChildActivities
 	me      *fakeMe
+	goals   *fakeGoals
 }
 
 func newTestServer(adminKey string) (*Server, *deps) {
 	gin.SetMode(gin.TestMode)
 
 	d := &deps{health: &fakeHealth{}, creator: &fakeCreator{}, lister: &fakeLister{}, getter: &fakeGetter{}, users: &fakeUsers{}, otp: &fakeOTPSender{}, media: &fakeMedia{}, auth: &fakeAuth{},
-		edit: &fakeActivityEdit{}, kids: &fakeChildActivities{}, me: &fakeMe{}}
+		edit: &fakeActivityEdit{}, kids: &fakeChildActivities{}, me: &fakeMe{}, goals: &fakeGoals{}}
 	s := New(config.Application{AdminAPIKey: adminKey}, nil, d.health, d.creator, d.lister, d.getter,
 		ActivityEditUseCases{Updater: d.edit, Deleter: activityDeleterFunc(d.edit.delete)},
+		GoalUseCases{
+			Creator: goalCreatorFunc(d.goals.create),
+			Lister:  goalListerFunc(d.goals.list),
+			Getter:  goalGetterFunc(d.goals.get),
+			Updater: goalUpdaterFunc(d.goals.update),
+			Deleter: goalDeleterFunc(d.goals.delete),
+		},
 		ChildActivityUseCases{
 			Creator:     childCreatorFunc(d.kids.create),
 			Getter:      childGetterFunc(d.me.getChild),

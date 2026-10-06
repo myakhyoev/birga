@@ -577,6 +577,264 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/goals": {
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- name_uz, name_ru and name_en are required, trimmed, at most 100 characters each (422)\n- each name is unique among active goals in its language, ignoring case (409)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "creates a goal",
+                "parameters": [
+                    {
+                        "description": "goal",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.CreateGoalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.goalView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/goals/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- sets deleted_at: the goal disappears from /v1/goals, sign-up refuses its id, and its\nid is removed from every user's goal_ids; its names can be used again",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "soft-deletes a goal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/rest.R"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    },
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "- send only the names to change; the same rules as create apply (422, 409)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "renames a goal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "names to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.UpdateGoalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.goalView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ForbiddenResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ConflictResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/users": {
             "get": {
                 "security": [
@@ -1196,7 +1454,7 @@ const docTemplate = `{
         },
         "/v1/auth/signup": {
             "post": {
-                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;\nan id that is not an active goal: 422\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -1730,6 +1988,103 @@ const docTemplate = `{
                         "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/goals": {
+            "get": {
+                "description": "- open without a token; every active goal, oldest first, not paginated",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "goals"
+                ],
+                "summary": "lists the goals a user can pick at sign-up",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.goalListView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/goals/{id}": {
+            "get": {
+                "description": "- open without a token; a deleted goal is 404",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "goals"
+                ],
+                "summary": "returns one goal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "goal id (UUID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.goalView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
                         }
                     },
                     "404": {
@@ -2443,6 +2798,23 @@ const docTemplate = `{
                 }
             }
         },
+        "rest.CreateGoalRequest": {
+            "type": "object",
+            "properties": {
+                "name_en": {
+                    "type": "string",
+                    "example": "Speech development"
+                },
+                "name_ru": {
+                    "type": "string",
+                    "example": "Развитие речи"
+                },
+                "name_uz": {
+                    "type": "string",
+                    "example": "Nutqni rivojlantirish"
+                }
+            }
+        },
         "rest.CreateUserRequest": {
             "type": "object",
             "properties": {
@@ -2652,6 +3024,16 @@ const docTemplate = `{
         "rest.SignUpRequest": {
             "type": "object",
             "properties": {
+                "goals": {
+                    "description": "goal ids from GET /v1/goals, optional",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
+                },
                 "name": {
                     "type": "string",
                     "example": "Dilnoza"
@@ -2663,6 +3045,17 @@ const docTemplate = `{
                 "phone_number": {
                     "type": "string",
                     "example": "+998901234567"
+                },
+                "relationship": {
+                    "description": "Relationship is who the user is to the children.",
+                    "type": "string",
+                    "enum": [
+                        "father",
+                        "mother",
+                        "educator",
+                        "nanny"
+                    ],
+                    "example": "mother"
                 },
                 "username": {
                     "type": "string",
@@ -2799,6 +3192,23 @@ const docTemplate = `{
                 "title_uz": {
                     "type": "string",
                     "example": "Rangli toshlar"
+                }
+            }
+        },
+        "rest.UpdateGoalRequest": {
+            "type": "object",
+            "properties": {
+                "name_en": {
+                    "type": "string",
+                    "example": "Speech development"
+                },
+                "name_ru": {
+                    "type": "string",
+                    "example": "Развитие речи"
+                },
+                "name_uz": {
+                    "type": "string",
+                    "example": "Nutqni rivojlantirish"
                 }
             }
         },
@@ -3112,6 +3522,48 @@ const docTemplate = `{
                 "_errCodeRateLimited"
             ]
         },
+        "rest.goalListView": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/rest.goalView"
+                    }
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 6
+                }
+            }
+        },
+        "rest.goalView": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                },
+                "name_en": {
+                    "type": "string",
+                    "example": "Speech development"
+                },
+                "name_ru": {
+                    "type": "string",
+                    "example": "Развитие речи"
+                },
+                "name_uz": {
+                    "type": "string",
+                    "example": "Nutqni rivojlantirish"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "rest.mediaView": {
             "type": "object",
             "properties": {
@@ -3140,6 +3592,15 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "goal_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
+                },
                 "id": {
                     "type": "string",
                     "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
@@ -3155,6 +3616,17 @@ const docTemplate = `{
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "relationship": {
+                    "description": "Relationship is null for users created before sign-up asked for it, or by an admin.",
+                    "type": "string",
+                    "enum": [
+                        "father",
+                        "mother",
+                        "educator",
+                        "nanny"
+                    ],
+                    "example": "mother"
                 },
                 "role": {
                     "enum": [
@@ -3281,6 +3753,15 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "goal_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
+                },
                 "id": {
                     "type": "string",
                     "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
@@ -3296,6 +3777,17 @@ const docTemplate = `{
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "relationship": {
+                    "description": "Relationship is null for users created before sign-up asked for it, or by an admin.",
+                    "type": "string",
+                    "enum": [
+                        "father",
+                        "mother",
+                        "educator",
+                        "nanny"
+                    ],
+                    "example": "mother"
                 },
                 "updated_at": {
                     "type": "string"

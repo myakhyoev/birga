@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -93,13 +94,15 @@ func TestSignUp(t *testing.T) {
 	s, d := newTestServer("")
 
 	code, r := do(t, s, http.MethodPost, "/v1/auth/signup",
-		`{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567", "user_role": "admin"}`, nil)
+		`{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567", "user_role": "admin",
+		  "relationship": "mother", "goals": ["`+testID+`"]}`, nil)
 	if code != http.StatusOK {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	want := domain.SignUpRequest{Name: "Dilnoza", Username: "dilnoza_k", Password: "s3cret-pass", PhoneNumber: "+998901234567"}
-	if d.auth.got != want {
+	want := domain.SignUpRequest{Name: "Dilnoza", Username: "dilnoza_k", Password: "s3cret-pass", PhoneNumber: "+998901234567",
+		Relationship: "mother", GoalIDs: []string{testID}}
+	if !reflect.DeepEqual(d.auth.got, want) {
 		t.Fatalf("request = %+v, want %+v", d.auth.got, want)
 	}
 

@@ -40,13 +40,13 @@ testable with small fakes.
 | `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
-| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `ActivityUpdate`, `RecommendationQuery`, `Completion`, `CompletionFilter`, `Streak`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `UserRole`, `TokenClaims`, `Principal`, `Child`), constants and format checks (goals, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing, the local day (`Location`, `LocalDay`) and the streak calculation (`ComputeStreak`) |
+| `internal/domain/` | business types (`Activity`, `ActivityFilter`, `ActivityUpdate`, `RecommendationQuery`, `Completion`, `CompletionFilter`, `Streak`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `UserRole`, `TokenClaims`, `Principal`, `Child`, `Goal`, `GoalUpdate`), constants and format checks (activity goals, relationships, goal names, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing, the local day (`Location`, `LocalDay`) and the streak calculation (`ComputeStreak`) |
 | `internal/errs/` | `errs.Error` type and sentinel errors (`list.go`) |
-| `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Child()` for `children` and `user_children`, `Activity()`, `Completion()` for `activity_completions`, `Media()`) and the transaction helper |
+| `internal/dbstore/` | PostgreSQL repositories (`User()`, `Auth()` for `user_auth`, `Child()` for `children` and `user_children`, `Activity()`, `Completion()` for `activity_completions`, `Media()`, `Goal()` for `goals`) and the transaction helper |
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
 | `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `activity_recommender`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `user_login`, `user_logout`, `token_refresher`, `profile_updater`, `password_resetter` |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `activity_recommender`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `goal_creator`, `goal_getter`, `goal_lister`, `goal_updater`, `goal_deleter`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `user_login`, `user_logout`, `token_refresher`, `profile_updater`, `password_resetter` |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -160,8 +160,10 @@ Phone verification is handed over through Redis rather than a token; sign-up ski
 1. `otp_verifier` runs `verifyScript` (or, for `OTP_DEFAULT_CODE`, `otpRepo.MarkVerified`, which
    drops any pending code and sets the same mark); a match sets `birga:otp:verified:<purpose>:<phone>` for
    `OTP_VERIFIED_TTL`. Profile phone changes and password resets read it (step 6).
-2. `user_signup` does not use OTP: it validates the fields, hashes the password with bcrypt
-   (default cost 10), and in one `InTx` creates the `users` row (no photo), issues the token pair
+2. `user_signup` does not use OTP: it validates the fields (including `relationship` and the goal
+   ids, which it deduplicates and checks with `goalRepo.CountActive`), hashes the password with bcrypt
+   (default cost 10), and in one `InTx` creates the `users` row (no photo; relationship and
+   `goal_ids` set), issues the token pair
    with role `unverified_user` and inserts `user_auth` with that role and the SHA-256 hashes of
    both tokens.
 3. `token_refresher` parses the refresh token (`tokens.Issuer.Parse`: HS256 only, issuer,

@@ -112,6 +112,18 @@ definitions:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
     type: object
+  rest.CreateGoalRequest:
+    properties:
+      name_en:
+        example: Speech development
+        type: string
+      name_ru:
+        example: Развитие речи
+        type: string
+      name_uz:
+        example: Nutqni rivojlantirish
+        type: string
+    type: object
   rest.CreateUserRequest:
     properties:
       name:
@@ -246,6 +258,13 @@ definitions:
     type: object
   rest.SignUpRequest:
     properties:
+      goals:
+        description: goal ids from GET /v1/goals, optional
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       name:
         example: Dilnoza
         type: string
@@ -254,6 +273,15 @@ definitions:
         type: string
       phone_number:
         example: "+998901234567"
+        type: string
+      relationship:
+        description: Relationship is who the user is to the children.
+        enum:
+        - father
+        - mother
+        - educator
+        - nanny
+        example: mother
         type: string
       username:
         example: dilnoza_k
@@ -344,6 +372,18 @@ definitions:
         type: string
       title_uz:
         example: Rangli toshlar
+        type: string
+    type: object
+  rest.UpdateGoalRequest:
+    properties:
+      name_en:
+        example: Speech development
+        type: string
+      name_ru:
+        example: Развитие речи
+        type: string
+      name_uz:
+        example: Nutqni rivojlantirish
         type: string
     type: object
   rest.UpdateProfileRequest:
@@ -576,6 +616,35 @@ definitions:
     - _errCodeInternalErr
     - _errCodeUnavailable
     - _errCodeRateLimited
+  rest.goalListView:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/rest.goalView'
+        type: array
+      total:
+        example: 6
+        type: integer
+    type: object
+  rest.goalView:
+    properties:
+      created_at:
+        type: string
+      id:
+        example: 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        type: string
+      name_en:
+        example: Speech development
+        type: string
+      name_ru:
+        example: Развитие речи
+        type: string
+      name_uz:
+        example: Nutqni rivojlantirish
+        type: string
+      updated_at:
+        type: string
+    type: object
   rest.mediaView:
     properties:
       content_type:
@@ -596,6 +665,12 @@ definitions:
     properties:
       created_at:
         type: string
+      goal_ids:
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       id:
         example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
         type: string
@@ -607,6 +682,16 @@ definitions:
         type: string
       photo_id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      relationship:
+        description: Relationship is null for users created before sign-up asked for
+          it, or by an admin.
+        enum:
+        - father
+        - mother
+        - educator
+        - nanny
+        example: mother
         type: string
       role:
         allOf:
@@ -696,6 +781,12 @@ definitions:
     properties:
       created_at:
         type: string
+      goal_ids:
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       id:
         example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
         type: string
@@ -707,6 +798,16 @@ definitions:
         type: string
       photo_id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      relationship:
+        description: Relationship is null for users created before sign-up asked for
+          it, or by an admin.
+        enum:
+        - father
+        - mother
+        - educator
+        - nanny
+        example: mother
         type: string
       updated_at:
         type: string
@@ -1075,6 +1176,169 @@ paths:
       - AdminKey: []
       summary: updates an activity partially, including publishing or unpublishing
         it
+      tags:
+      - admin
+  /v1/admin/goals:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        - name_uz, name_ru and name_en are required, trimmed, at most 100 characters each (422)
+        - each name is unique among active goals in its language, ignoring case (409)
+      parameters:
+      - description: goal
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.CreateGoalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.goalView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/rest.ConflictResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      - BearerAuth: []
+      summary: creates a goal
+      tags:
+      - admin
+  /v1/admin/goals/{id}:
+    delete:
+      description: |-
+        - sets deleted_at: the goal disappears from /v1/goals, sign-up refuses its id, and its
+        id is removed from every user's goal_ids; its names can be used again
+      parameters:
+      - description: goal id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/rest.R'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      - BearerAuth: []
+      summary: soft-deletes a goal
+      tags:
+      - admin
+    patch:
+      consumes:
+      - application/json
+      description: '- send only the names to change; the same rules as create apply
+        (422, 409)'
+      parameters:
+      - description: goal id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: names to change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/rest.UpdateGoalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.goalView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/rest.UnauthorizedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/rest.ForbiddenResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/rest.ConflictResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/rest.UnprocessableContentResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      security:
+      - AdminKey: []
+      - BearerAuth: []
+      summary: renames a goal
       tags:
       - admin
   /v1/admin/users:
@@ -1488,6 +1752,9 @@ paths:
         unverified_user (stored in user_auth.role and written into the tokens as the role claim)
         - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
         password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
+        - relationship is required: father, mother, educator or nanny (422)
+        - goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;
+        an id that is not an active goal: 422
         - no profile photo here: set photo_id later with PATCH /v1/me
         - username or phone number already used: 409
         - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
@@ -1844,6 +2111,64 @@ paths:
       summary: a child's streak and progress
       tags:
       - children
+  /v1/goals:
+    get:
+      description: '- open without a token; every active goal, oldest first, not paginated'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.goalListView'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      summary: lists the goals a user can pick at sign-up
+      tags:
+      - goals
+  /v1/goals/{id}:
+    get:
+      description: '- open without a token; a deleted goal is 404'
+      parameters:
+      - description: goal id (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/rest.R'
+            - properties:
+                data:
+                  $ref: '#/definitions/rest.goalView'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/rest.BadRequestResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/rest.NotFoundResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/rest.InternalServerErrorResponse'
+      summary: returns one goal
+      tags:
+      - goals
   /v1/me:
     delete:
       description: |-

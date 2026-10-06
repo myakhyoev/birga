@@ -67,6 +67,8 @@ setting `deleted_at`.
 | `username` | `TEXT` | yes | | unique among non-deleted users |
 | `phone_number` | `VARCHAR(15)` | yes | | E.164 length limit; unique among non-deleted users |
 | `photo_id` | `UUID` | yes | | id of the profile photo, references `media(id)` `ON DELETE SET NULL` (constraint `users_photo_id_fkey`, added by `000003_create_media_table`); NULL after sign-up, set through `PATCH /v1/me` |
+| `relationship` | `user_relationship` | yes | | enum `father`, `mother`, `educator`, `nanny` (added by `000010_add_relationship_and_goals`); required by sign-up, NULL for older users and users created by an admin |
+| `goal_ids` | `UUID[]` | no | `'{}'` | ids of `goals` the user picked at sign-up (added by `000010_add_relationship_and_goals`); no foreign key, see [`goals`](#goals) |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
@@ -85,6 +87,36 @@ Application rules not enforced by the database (see [api.md](api.md#users-admin)
 rows with `deleted_at IS NULL` and maps violations of `users_username_uniq` and
 `users_phone_number_uniq` to 409 conflicts, and a violation of `users_photo_id_fkey` (a
 `photo_id` that was never uploaded) to 422.
+
+### `goals`
+
+Development goals a user picks at sign-up, named in three languages. Created by
+`000010_add_relationship_and_goals`. Rows are soft-deleted by setting `deleted_at`. Not related
+to `activities.goal`, which is a fixed text key.
+
+| Column | Type | Null | Default | Notes |
+|---|---|---|---|---|
+| `id` | `UUID` | no | `gen_random_uuid()` | primary key |
+| `name_uz` | `TEXT` | no | | Uzbek name |
+| `name_ru` | `TEXT` | no | | Russian name |
+| `name_en` | `TEXT` | no | | English name |
+| `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
+| `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
+
+Indexes: `goals_name_uz_uniq`, `goals_name_ru_uniq`, `goals_name_en_uniq`, unique on
+`(LOWER(name_xx)) WHERE deleted_at IS NULL`. A name is unique per language among active goals,
+ignoring case; deleting a goal frees its names. `internal/dbstore/goal.go` maps a violation to
+409 (`errs.ErrGoalNameTaken`).
+
+`users.goal_ids` points at goals, but Postgres cannot put a foreign key on array elements, so:
+
+- sign-up checks that every id is an active goal (`goalRepo.CountActive`) before inserting the user;
+- `goalRepo.Delete` soft-deletes the goal and removes its id from every `users.goal_ids`
+  (`array_remove`) in one statement, so users never keep a deleted goal.
+
+Repository (`store.Goal()`): `Create`, `Get`, `List` (all active, oldest first), `CountActive`,
+`Update` (partial), `Delete` (soft, see above).
 
 ### `user_auth`
 
