@@ -32,7 +32,7 @@ func (s *Server) endpoints() {
 	v1.POST("/auth/logout", s.userAuth(), s.Logout())
 
 	// Every signed-in role may manage its own children; ownership is checked per child in the use cases.
-	v1.POST("/children", s.userAuth(domain.UserRoleUser, domain.UserRolePaidUser, domain.UserRoleAdmin), s.CreateChild())
+	v1.POST("/children", s.userAuth(domain.UserRoleUnverifiedUser, domain.UserRoleUser, domain.UserRolePaidUser, domain.UserRoleAdmin), s.CreateChild())
 
 	// The signed-in user's own account. Every role may use it.
 	me := v1.Group("/me", s.userAuth())

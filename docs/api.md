@@ -26,7 +26,7 @@ Every response, success or failure, has the same shape:
 | -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
-| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; sign-up without a verified phone number or with `user_role: admin`; profile phone change or password reset without the matching OTP verification |
+| -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification |
 | -30 | 404 | not found | unknown id, unpublished or soft-deleted activity on a public endpoint, soft-deleted user, a child that is not the caller's, no activity to recommend, OTP expired or not requested, `reset_password` OTP for a number no user has |
 | -40 | 409 | conflict | uniqueness conflict, e.g. `username is already taken`, `phone number is already taken` |
 | -50 | 500 | internal error | anything unexpected; details only in server logs |
@@ -52,12 +52,12 @@ CORS allows any origin.
 `/v1/admin/*` accepts either an admin user's access token or the shared admin key.
 
 - With an `Authorization` header, the request is checked as [user authentication](#user-authentication)
-  with role `admin` only: an invalid token is 401 (-20), a valid token of a `user` or `paid_user`
+  with role `admin` only: an invalid token is 401 (-20), a valid token of any other role
   is 403 (-21). `X-Admin-Key` is ignored then, so a valid key does not rescue a non-admin token.
 - Without one, send `X-Admin-Key: <ADMIN_API_KEY>`, a stop-gap for scripts and seeding. The
   comparison is constant-time. Wrong or missing key: 401, code -20. `ADMIN_API_KEY` not set on
   the server: 403, code -21, so then only admin users get in.
-- Nobody can become an admin through the API (sign-up refuses `user_role: admin`); set
+- Nobody can become an admin through the API (sign-up always gives `unverified_user`); set
   `user_auth.role = 'admin'` in the database. The new role applies at once, because the role
   is read from `user_auth` on every request, not from the token.
 
@@ -71,9 +71,9 @@ token from `/v1/auth/signup`, `/v1/auth/login`, `/v1/auth/forgot-password` or `/
   24 hours by default), and still the latest access token issued to the user (each refresh,
   login or password reset replaces the stored one; logout and deleting the user remove it). Otherwise: 401, code -20.
   Refresh the token and retry.
-- A route can be limited to some roles (`user`, `paid_user`, `admin`). The role checked is the
+- A route can be limited to some roles (`unverified_user`, `user`, `paid_user`, `admin`). The role checked is the
   user's current `user_auth.role`, not the token's `role` claim. A role outside the list: 403,
-  code -21, `your role cannot use this endpoint`. Today `POST /v1/children` lists all three
+  code -21, `your role cannot use this endpoint`. Today `POST /v1/children` lists all four
   roles, `/v1/me...` and `/v1/children/{id}...` take any role, and `/v1/admin/*` allows only `admin`.
 - A child id the user is not linked to (through `user_children`) answers 404, the same as a
   child that does not exist, so other families' ids cannot be probed.
@@ -199,7 +199,7 @@ The signed-in user's own account, for the app's profile page. All of these need
 
 #### Get profile
 
-Response `data` is the [user object](#user-object) plus `role` (`user`, `paid_user` or `admin`,
+Response `data` is the [user object](#user-object) plus `role` (`unverified_user`, `user`, `paid_user` or `admin`,
 the current `user_auth.role`).
 
 #### Edit profile
@@ -382,7 +382,7 @@ Body (all fields required):
 | Field | Rules |
 |---|---|
 | `phone_number` | Uzbek mobile number in E.164: `+998` and 9 digits (422). Play Mobile only delivers in Uzbekistan |
-| `purpose` | `sign_up` (registration), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`POST /v1/auth/forgot-password` and `PUT /v1/me/password`) (422) |
+| `purpose` | `sign_up` (registration; not required by sign-up for now), `update_user` (a new phone number for `PATCH /v1/me`) or `reset_password` (`POST /v1/auth/forgot-password` and `PUT /v1/me/password`) (422) |
 | `ip_address` | the end user's IPv4 or IPv6 address, as seen by the app or proxy in front of the API (422) |
 
 Response `data`:
@@ -445,8 +445,7 @@ production. Each use logs a warning `otp verified with the default code`.
 
 The comparison runs as one Redis script, so two parallel requests cannot both use a code.
 The verified mark is a Redis key (see [data-model.md](data-model.md#redis-keys)) rather than a
-token in the response: `POST /v1/auth/signup` checks it for `sign_up`, `PATCH /v1/me` for
-`update_user` (the new number), and `POST /v1/auth/forgot-password` and `PUT /v1/me/password`
+token in the response: `PATCH /v1/me` checks it for `update_user` (the new number), and `POST /v1/auth/forgot-password` and `PUT /v1/me/password`
 for `reset_password`.
 
 Examples:
@@ -466,7 +465,7 @@ with `JWT_SECRET`.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/v1/auth/signup` | create a user whose phone number was verified, return access and refresh tokens |
+| POST | `/v1/auth/signup` | create a user (role `unverified_user`, no OTP step), return access and refresh tokens |
 | POST | `/v1/auth/login` | sign in with username and password, return a new token pair |
 | POST | `/v1/auth/logout` | sign out: the current tokens stop working (needs the access token) |
 | POST | `/v1/auth/forgot-password` | set a new password for a signed-out user whose phone passed a `reset_password` code, return a new token pair |
@@ -476,7 +475,7 @@ Only one token pair is valid per user at a time: sign-up, login and password res
 hashes of the pair they return, so the pair held by any other device stops working.
 
 Token claims: `sub` is the user id, `typ` is `access` or `refresh`, `role` is the user's
-`user_auth.role` when the token was issued (`user`, `admin` or `paid_user`), plus `iss`
+`user_auth.role` when the token was issued (`unverified_user`, `user`, `admin` or `paid_user`), plus `iss`
 (`JWT_ISSUER`), `iat`, `exp` and a unique `jti`. An access token lives `JWT_ACCESS_TTL`
 (24 hours). A refresh token has no `exp` and never expires while `JWT_REFRESH_TTL` is 0, the
 default; it stops working only when the user logs out, logs in again, resets the password or is
@@ -487,11 +486,12 @@ the other is expected. Endpoints for signed-in users take the access token as
 
 #### Sign up
 
-Flow: `POST /v1/otp/send` and `POST /v1/otp/verify` with `purpose: sign_up`, then within
-`OTP_VERIFIED_TTL` (10 min):
+One call, no OTP step: the phone number is not verified, so every new user gets the role
+`unverified_user`. There is no profile photo at sign-up; the app sets `photo_id` later with
+[`PATCH /v1/me`](#edit-profile).
 
 ```json
-{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567", "user_role": "user"}
+{"name": "Dilnoza", "username": "dilnoza_k", "password": "s3cret-pass", "phone_number": "+998901234567"}
 ```
 
 | Field | Rules |
@@ -499,8 +499,9 @@ Flow: `POST /v1/otp/send` and `POST /v1/otp/verify` with `purpose: sign_up`, the
 | `name` | required, at most 100 characters, trimmed |
 | `username` | 3 to 32 of `a-z`, `0-9`, `_`, `.`; trimmed and lowercased |
 | `password` | 8 to 72 bytes (bcrypt reads at most 72); stored only as a bcrypt hash |
-| `phone_number` | Uzbek number, `+998` and 9 digits; must be the verified one |
-| `user_role` | optional: `user` (default) or `paid_user`. `admin` is refused with 403 so nobody can make themselves an admin; any other value is 422 |
+| `phone_number` | Uzbek number, `+998` and 9 digits; not verified |
+
+Any other field (for example an old client's `user_role` or `photo_id`) is ignored.
 
 Response `data`:
 
@@ -515,14 +516,14 @@ Behaviour (`usecases/user_signup`):
 | Result | HTTP | error_code | error_note |
 |---|---:|---:|---|
 | invalid field | 422 | -10 | which field and why |
-| no `sign_up` verification for the phone (never verified, expired, or already used by a sign-up) | 403 | -21 | `phone number is not verified, verify a sign_up code with /v1/otp/verify first` |
-| `user_role` is `admin` | 403 | -21 | `user_role admin cannot be chosen at sign-up` |
 | username or phone number belongs to an active user | 409 | -40 | `username is already taken` / `phone number is already taken` |
 
-- The `users` row (name, username, phone) and the `user_auth` row (username, bcrypt password, role,
-  SHA-256 hashes of both tokens) are written in one transaction.
-- The verified mark is deleted only after the user is stored, so a sign-up that fails (for
-  example a taken username) can be retried with another username without a new code.
+- The `users` row (name, username, phone; `photo_id` NULL) and the `user_auth` row (username,
+  bcrypt password, role `unverified_user`, SHA-256 hashes of both tokens) are written in one transaction.
+- The access and refresh tokens carry `role: unverified_user`. That role may use `/v1/me...`,
+  `POST /v1/children` and `/v1/children/{id}...` like `user`; nothing promotes it yet.
+- The OTP endpoints and the `sign_up` purpose still exist but sign-up no longer reads the
+  `sign_up` verified mark.
 
 #### Refresh
 
@@ -613,7 +614,8 @@ curl -X POST localhost:8080/v1/auth/forgot-password -H 'Content-Type: applicatio
 ### Media (public)
 
 Uploads an image to AWS S3 and returns its id and URL. The app uploads a profile photo
-here first, then saves the returned `id` as the user's `photo_id`.
+here first, then saves the returned `id` as the user's `photo_id` with `PATCH /v1/me` (sign-up
+takes no photo).
 
 | Method | Path | Description |
 |---|---|---|

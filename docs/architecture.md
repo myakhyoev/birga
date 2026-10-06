@@ -155,16 +155,15 @@ layout in [data-model.md](data-model.md#redis-keys)). It uses
 
 ## Authentication
 
-Sign-up depends on a verified phone number, handed over through Redis rather than a token:
+Phone verification is handed over through Redis rather than a token; sign-up skips it for now:
 
 1. `otp_verifier` runs `verifyScript` (or, for `OTP_DEFAULT_CODE`, `otpRepo.MarkVerified`, which
    drops any pending code and sets the same mark); a match sets `birga:otp:verified:<purpose>:<phone>` for
-   `OTP_VERIFIED_TTL`.
-2. `user_signup` checks the role (`user` by default, `paid_user` allowed, `admin` refused) and
-   the `sign_up` mark, hashes the password with bcrypt (default cost 10),
-   and in one `InTx` creates the `users` row, issues the token pair (with the `role` claim) and inserts `user_auth`
-   with the SHA-256 hashes of both tokens. Only after the commit does it delete the mark, so a
-   failed sign-up can be retried.
+   `OTP_VERIFIED_TTL`. Profile phone changes and password resets read it (step 6).
+2. `user_signup` does not use OTP: it validates the fields, hashes the password with bcrypt
+   (default cost 10), and in one `InTx` creates the `users` row (no photo), issues the token pair
+   with role `unverified_user` and inserts `user_auth` with that role and the SHA-256 hashes of
+   both tokens.
 3. `token_refresher` parses the refresh token (`tokens.Issuer.Parse`: HS256 only, issuer,
    expiry when the token has one, `typ`; refresh tokens carry no `exp` while `JWT_REFRESH_TTL`
    is 0, access tokens must have one), loads `user_auth` and compares hashes in constant time, then issues a new

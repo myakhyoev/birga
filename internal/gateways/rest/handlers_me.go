@@ -23,7 +23,7 @@ type ResetPasswordRequest struct {
 
 type profileView struct {
 	userView
-	Role domain.UserRole `json:"role" example:"user" enums:"user,paid_user,admin"`
+	Role domain.UserRole `json:"role" example:"user" enums:"unverified_user,user,paid_user,admin"`
 }
 
 // GetProfile godoc swagger

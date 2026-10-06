@@ -7,8 +7,8 @@ and Russian.
 
 This repository is the Go API behind the app. Today it serves the activity catalogue and a
 small admin API for managing activities and users (create, read, update, publish, soft
-delete), sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for sign-up
-and account changes, and uploads profile photos to AWS S3. For a signed-in parent it
+delete), sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for account
+changes (sign-up skips OTP for now and gives the role `unverified_user`), and uploads profile photos to AWS S3. For a signed-in parent it
 recommends the day's activity for a child, records completions with an optional reflection,
 and reports the child's streak. Child profiles exist in the database and repository
 (`children`, linked to parents many-to-many) but have no endpoints yet, so children are

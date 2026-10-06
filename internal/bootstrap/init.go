@@ -294,7 +294,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		otpSender:   otpsender.New(l.Named("usecase.otp_sender"), *cfg.OTP, cache.OTP(), store.User(), drv.sms),
 		otpVerifier: otpverifier.New(l.Named("usecase.otp_verifier"), checkOTPDefaultCode(l, cfg), cache.OTP()),
 
-		signUp:         usersignup.New(l.Named("usecase.user_signup"), cache.OTP(), store, store.User(), store.Auth(), jwt),
+		signUp:         usersignup.New(l.Named("usecase.user_signup"), store, store.User(), store.Auth(), jwt),
 		tokenRefresher: tokenrefresher.New(l.Named("usecase.token_refresher"), jwt, store.Auth()),
 		tokenChecker:   tokenchecker.New(l.Named("usecase.token_checker"), jwt, store.Auth()),
 		login:          userlogin.New(l.Named("usecase.user_login"), store.Auth(), jwt),

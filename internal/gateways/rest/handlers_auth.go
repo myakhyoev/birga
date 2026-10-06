@@ -13,8 +13,6 @@ type SignUpRequest struct {
 	Username    string `json:"username" example:"dilnoza_k"`
 	Password    string `json:"password" example:"s3cret-pass"`
 	PhoneNumber string `json:"phone_number" example:"+998901234567"`
-	// UserRole is optional and defaults to user; admin is refused with 403.
-	UserRole string `json:"user_role" enums:"user,paid_user" example:"user"`
 }
 
 type tokenPairView struct {
@@ -25,13 +23,11 @@ type tokenPairView struct {
 
 // SignUp godoc swagger
 // @Summary creates a user and returns their tokens
-// @Description - the phone number must be verified first: POST /v1/otp/send and /v1/otp/verify with
-// @Description   purpose sign_up; the verification lasts OTP_VERIFIED_TTL (default 10 minutes) and is
-// @Description   used up by a successful sign-up. Not verified: 403
+// @Description - no OTP step: the phone number is not verified, so every new user gets the role
+// @Description   unverified_user (stored in user_auth.role and written into the tokens as the role claim)
 // @Description - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
 // @Description   password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
-// @Description - user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),
-// @Description   anything else is 422. Stored in user_auth.role and written into the tokens as the role claim
+// @Description - no profile photo here: set photo_id later with PATCH /v1/me
 // @Description - username or phone number already used: 409
 // @Description - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
 // @Description   default 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer <token>
@@ -41,7 +37,6 @@ type tokenPairView struct {
 // @Param body body SignUpRequest true "new user"
 // @Success 200 {object} rest.R{data=rest.tokenPairView}
 // @Failure 400 {object} rest.BadRequestResponse
-// @Failure 403 {object} rest.ForbiddenResponse
 // @Failure 409 {object} rest.ConflictResponse
 // @Failure 422 {object} rest.UnprocessableContentResponse
 // @Failure 500 {object} rest.InternalServerErrorResponse
@@ -60,7 +55,6 @@ func (s *Server) SignUp() gin.HandlerFunc {
 			Username:    req.Username,
 			Password:    req.Password,
 			PhoneNumber: req.PhoneNumber,
-			Role:        domain.UserRole(req.UserRole),
 		})
 		if err != nil {
 			Return(c, nil, err)

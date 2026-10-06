@@ -66,7 +66,7 @@ setting `deleted_at`.
 | `name` | `TEXT` | yes | | display name |
 | `username` | `TEXT` | yes | | unique among non-deleted users |
 | `phone_number` | `VARCHAR(15)` | yes | | E.164 length limit; unique among non-deleted users |
-| `photo_id` | `UUID` | yes | | id of the profile photo, references `media(id)` `ON DELETE SET NULL` (constraint `users_photo_id_fkey`, added by `000003_create_media_table`) |
+| `photo_id` | `UUID` | yes | | id of the profile photo, references `media(id)` `ON DELETE SET NULL` (constraint `users_photo_id_fkey`, added by `000003_create_media_table`); NULL after sign-up, set through `PATCH /v1/me` |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | set by the application on update and soft delete (no trigger) |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | set on soft delete; `NULL` means active |
@@ -90,7 +90,7 @@ rows with `deleted_at IS NULL` and maps violations of `users_username_uniq` and
 
 Authentication state for a user, one row per user. Created by
 `000002_create_users_tables`; `username` and `password` added by
-`000004_add_user_auth_credentials`; `role` added by `000005_add_user_auth_role`. `POST /v1/auth/signup` inserts the row;
+`000004_add_user_auth_credentials`; `role` added by `000005_add_user_auth_role`, value `unverified_user` by `000009_add_unverified_user_role`. `POST /v1/auth/signup` inserts the row;
 `PUT /v1/me/password` and `POST /v1/auth/forgot-password` replace `password`, `access_token` and `refresh_token`
 together (`authRepo.SetCredentials`). `POST /v1/auth/login` replaces both token hashes and `POST /v1/auth/logout`
 sets them to `NULL` (`authRepo.SetTokens`); login looks the row up by `username` (`authRepo.GetByUsername`).
@@ -102,7 +102,7 @@ sets them to `NULL` (`authRepo.SetTokens`); login looks the row up by `username`
 | `access_token` | `TEXT` | yes | | SHA-256 (hex) of the newest access token (`domain.HashToken`) |
 | `refresh_token` | `TEXT` | yes | | SHA-256 (hex) of the current refresh token; `POST /v1/auth/refresh` accepts only this one |
 | `username` | `TEXT` | yes | | sign-in username, same value as `users.username` (kept in sync by `users_sync_auth_username_trg`) |
-| `role` | `user_role` | no | `'user'` | enum `user`, `admin`, `paid_user`. Sign-up accepts `user` and `paid_user`; `admin` is set only in the database for now. Copied into the tokens' `role` claim |
+| `role` | `user_role` | no | `'user'` | enum `user`, `admin`, `paid_user`, `unverified_user`. Sign-up always sets `unverified_user` (the phone is not verified); the other roles are set only in the database for now. Copied into the tokens' `role` claim |
 | `password` | `TEXT` | yes | | bcrypt hash (`$2a$10$...`) of the password; the plain password is never stored |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | not updated automatically |
@@ -277,7 +277,7 @@ means users request a new code (and verify again before signing up).
 | `birga:otp:cooldown:<purpose>:<phone>` | string | `OTP_RESEND_COOLDOWN` (1 min) | present while a new code may not be sent |
 | `birga:otp:limit:phone:<phone>` | counter | 1 hour from the first code | codes sent to the phone, any purpose |
 | `birga:otp:limit:ip:<ip>` | counter | 1 hour from the first code | codes requested from the IP (canonical form, e.g. `2001:db8::1`) |
-| `birga:otp:verified:<purpose>:<phone>` | string `1` | `OTP_VERIFIED_TTL` (10 min) | set by the verify script when a code matches, or by `MarkVerified` for `OTP_DEFAULT_CODE`; `POST /v1/auth/signup` requires the `sign_up` one, `PATCH /v1/me` the `update_user` one for a new phone number, `PUT /v1/me/password` and `POST /v1/auth/forgot-password` the `reset_password` one for the user's number; each deletes it after its write |
+| `birga:otp:verified:<purpose>:<phone>` | string `1` | `OTP_VERIFIED_TTL` (10 min) | set by the verify script when a code matches, or by `MarkVerified` for `OTP_DEFAULT_CODE`; `PATCH /v1/me` requires the `update_user` one for a new phone number, `PUT /v1/me/password` and `POST /v1/auth/forgot-password` the `reset_password` one for the user's number; each deletes it after its write |
 
 `<phone>` is E.164 (`+998901234567`), `<purpose>` is `sign_up`, `update_user` or `reset_password`.
 

@@ -5,11 +5,13 @@ definitions:
     - user
     - admin
     - paid_user
+    - unverified_user
     type: string
     x-enum-varnames:
     - UserRoleUser
     - UserRoleAdmin
     - UserRolePaidUser
+    - UserRoleUnverifiedUser
   rest.BadRequestResponse:
     properties:
       data: {}
@@ -252,14 +254,6 @@ definitions:
         type: string
       phone_number:
         example: "+998901234567"
-        type: string
-      user_role:
-        description: UserRole is optional and defaults to user; admin is refused with
-          403.
-        enum:
-        - user
-        - paid_user
-        example: user
         type: string
       username:
         example: dilnoza_k
@@ -618,6 +612,7 @@ definitions:
         allOf:
         - $ref: '#/definitions/domain.UserRole'
         enum:
+        - unverified_user
         - user
         - paid_user
         - admin
@@ -1489,13 +1484,11 @@ paths:
       consumes:
       - application/json
       description: |-
-        - the phone number must be verified first: POST /v1/otp/send and /v1/otp/verify with
-        purpose sign_up; the verification lasts OTP_VERIFIED_TTL (default 10 minutes) and is
-        used up by a successful sign-up. Not verified: 403
+        - no OTP step: the phone number is not verified, so every new user gets the role
+        unverified_user (stored in user_auth.role and written into the tokens as the role claim)
         - name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);
         password: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)
-        - user_role: user (default when omitted) or paid_user; admin cannot be chosen here (403),
-        anything else is 422. Stored in user_auth.role and written into the tokens as the role claim
+        - no profile photo here: set photo_id later with PATCH /v1/me
         - username or phone number already used: 409
         - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
         default 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer <token>
@@ -1522,10 +1515,6 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/rest.BadRequestResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/rest.ForbiddenResponse'
         "409":
           description: Conflict
           schema:

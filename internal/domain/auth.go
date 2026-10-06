@@ -27,26 +27,21 @@ const (
 	UserRoleUser     UserRole = "user"
 	UserRoleAdmin    UserRole = "admin"
 	UserRolePaidUser UserRole = "paid_user"
+	// UserRoleUnverifiedUser is every new sign-up: the phone number has not been confirmed.
+	UserRoleUnverifiedUser UserRole = "unverified_user"
 )
 
 // IsKnown reports whether r is one of the user_role enum values.
 func (r UserRole) IsKnown() bool {
-	return r == UserRoleUser || r == UserRoleAdmin || r == UserRolePaidUser
+	return r == UserRoleUser || r == UserRoleAdmin || r == UserRolePaidUser || r == UserRoleUnverifiedUser
 }
 
-// IsSelfAssignable reports whether a user may pick r at sign-up. admin is never self-assigned.
-func (r UserRole) IsSelfAssignable() bool {
-	return r == UserRoleUser || r == UserRolePaidUser
-}
-
-// SignUpRequest registers a user whose phone number passed a sign_up OTP check.
+// SignUpRequest registers a user. The new user always gets UserRoleUnverifiedUser.
 type SignUpRequest struct {
 	Name        string
 	Username    string
 	Password    string
 	PhoneNumber string
-	// Role defaults to UserRoleUser when empty.
-	Role UserRole
 }
 
 // TokenPair is what a client keeps after signing up. AccessExpiresIn is the access token lifetime.

@@ -26,11 +26,9 @@ var (
 	ErrOTPNotFound              = Errf(ErrNotFound, "code expired or was not requested, request a new one")
 	ErrOTPTooManyAttempts       = Errf(ErrRateLimited, "too many wrong codes, request a new one")
 
-	ErrPhoneNotVerified      = Errf(ErrForbidden, "phone number is not verified, verify a sign_up code with /v1/otp/verify first")
-	ErrRoleNotSelfAssignable = Errf(ErrForbidden, "user_role admin cannot be chosen at sign-up")
-	ErrInvalidRefreshToken   = Errf(ErrUnauthorized, "refresh token is invalid or expired, sign in again")
-	ErrRoleNotAllowed        = Errf(ErrForbidden, "your role cannot use this endpoint")
-	ErrInvalidCredentials    = Errf(ErrUnauthorized, "username or password is wrong")
+	ErrInvalidRefreshToken = Errf(ErrUnauthorized, "refresh token is invalid or expired, sign in again")
+	ErrRoleNotAllowed      = Errf(ErrForbidden, "your role cannot use this endpoint")
+	ErrInvalidCredentials  = Errf(ErrUnauthorized, "username or password is wrong")
 
 	ErrNewPhoneNotVerified = Errf(ErrForbidden, "new phone number is not verified, verify an update_user code for it first")
 	ErrResetNotVerified    = Errf(ErrForbidden, "phone number is not verified, verify a reset_password code with /v1/otp/verify first")
