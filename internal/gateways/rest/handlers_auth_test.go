@@ -57,7 +57,7 @@ func (fn forgotFunc) ExecuteByPhone(_ context.Context, phone, password string) (
 func (f *fakeAuth) Execute(_ context.Context, req domain.SignUpRequest) (domain.TokenPair, error) {
 	f.got = req
 
-	return domain.TokenPair{AccessToken: "a", RefreshToken: "r", AccessExpiresIn: 15 * time.Minute}, f.err
+	return domain.TokenPair{UserID: testUserID, AccessToken: "a", RefreshToken: "r", AccessExpiresIn: 15 * time.Minute}, f.err
 }
 
 func (f *fakeAuth) refresh(token string) (domain.AccessToken, error) {
@@ -107,7 +107,7 @@ func TestSignUp(t *testing.T) {
 	}
 
 	data, _ := r.Data.(map[string]any)
-	if data["access_token"] != "a" || data["refresh_token"] != "r" || data["expires_in"] != float64(900) {
+	if data["user_id"] != testUserID || data["access_token"] != "a" || data["refresh_token"] != "r" || data["expires_in"] != float64(900) {
 		t.Fatalf("unexpected data: %+v", r.Data)
 	}
 

@@ -558,10 +558,10 @@ Any other field (for example an old client's `user_role` or `photo_id`) is ignor
 Response `data`:
 
 ```json
-{"access_token": "eyJ...", "refresh_token": "eyJ...", "expires_in": 86400}
+{"user_id": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11", "access_token": "eyJ...", "refresh_token": "eyJ...", "expires_in": 86400}
 ```
 
-`expires_in` is the access token lifetime in seconds.
+`user_id` is the new user's id; `expires_in` is the access token lifetime in seconds.
 
 Behaviour (`usecases/user_signup`):
 

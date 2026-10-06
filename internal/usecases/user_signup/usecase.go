@@ -107,6 +107,8 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 			return err
 		}
 
+		pair.UserID = user.ID
+
 		return uc.auth.Create(ctx, domain.UserAuth{
 			UserID:           user.ID,
 			Username:         req.Username,

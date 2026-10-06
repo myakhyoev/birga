@@ -50,6 +50,8 @@ type SignUpRequest struct {
 
 // TokenPair is what a client keeps after signing up. AccessExpiresIn is the access token lifetime.
 type TokenPair struct {
+	// UserID is the signed-in user's id; set by sign-up.
+	UserID          string
 	AccessToken     string
 	RefreshToken    string
 	AccessExpiresIn time.Duration

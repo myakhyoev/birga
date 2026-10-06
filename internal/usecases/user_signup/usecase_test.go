@@ -102,7 +102,7 @@ func TestExecute(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 
-	if pair.AccessToken != "access."+userID+".unverified_user" || pair.RefreshToken != "refresh."+userID+".unverified_user" || pair.AccessExpiresIn != 15*time.Minute {
+	if pair.UserID != userID || pair.AccessToken != "access."+userID+".unverified_user" || pair.RefreshToken != "refresh."+userID+".unverified_user" || pair.AccessExpiresIn != 15*time.Minute {
 		t.Fatalf("unexpected pair: %+v", pair)
 	}
 

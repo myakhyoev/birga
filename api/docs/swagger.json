@@ -1447,7 +1447,7 @@
         },
         "/v1/auth/signup": {
             "post": {
-                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;\nan id that is not an active goal: 422\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
+                "description": "- no OTP step: the phone number is not verified, so every new user gets the role\nunverified_user (stored in user_auth.role and written into the tokens as the role claim)\n- name: 1 to 100 characters; username: 3 to 32 of a-z, 0-9, '_' or '.' (lowercased);\npassword: 8 to 72 bytes, stored as a bcrypt hash; phone_number: +998 and 9 digits (422)\n- relationship is required: father, mother, educator or nanny (422)\n- goals is optional: up to 20 goal ids from GET /v1/goals; repeats are stored once;\nan id that is not an active goal: 422\n- no profile photo here: set photo_id later with PATCH /v1/me\n- username or phone number already used: 409\n- returns the new user's user_id with the tokens\n- access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,\ndefault 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer \u003ctoken\u003e",
                 "consumes": [
                     "application/json"
                 ],
@@ -1481,7 +1481,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/rest.tokenPairView"
+                                            "$ref": "#/definitions/rest.signUpView"
                                         }
                                     }
                                 }
@@ -3656,6 +3656,28 @@
                     "description": "seconds until a new code may be requested",
                     "type": "integer",
                     "example": 60
+                }
+            }
+        },
+        "rest.signUpView": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "expires_in": {
+                    "description": "seconds until the access token expires",
+                    "type": "integer",
+                    "example": 86400
+                },
+                "refresh_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"
                 }
             }
         },

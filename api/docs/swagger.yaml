@@ -719,6 +719,22 @@ definitions:
         example: 60
         type: integer
     type: object
+  rest.signUpView:
+    properties:
+      access_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      expires_in:
+        description: seconds until the access token expires
+        example: 86400
+        type: integer
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      user_id:
+        example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
+        type: string
+    type: object
   rest.statusType:
     enum:
     - Success
@@ -1757,6 +1773,7 @@ paths:
         an id that is not an active goal: 422
         - no profile photo here: set photo_id later with PATCH /v1/me
         - username or phone number already used: 409
+        - returns the new user's user_id with the tokens
         - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
         default 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer <token>
       parameters:
@@ -1776,7 +1793,7 @@ paths:
             - $ref: '#/definitions/rest.R'
             - properties:
                 data:
-                  $ref: '#/definitions/rest.tokenPairView'
+                  $ref: '#/definitions/rest.signUpView'
               type: object
         "400":
           description: Bad Request

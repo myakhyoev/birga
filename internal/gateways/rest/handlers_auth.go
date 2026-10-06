@@ -18,6 +18,12 @@ type SignUpRequest struct {
 	Goals        []string `json:"goals" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"` // goal ids from GET /v1/goals, optional
 }
 
+// signUpView is the sign-up response: the new user's id and their tokens.
+type signUpView struct {
+	UserID string `json:"user_id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
+	tokenPairView
+}
+
 type tokenPairView struct {
 	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
 	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
@@ -35,13 +41,14 @@ type tokenPairView struct {
 // @Description   an id that is not an active goal: 422
 // @Description - no profile photo here: set photo_id later with PATCH /v1/me
 // @Description - username or phone number already used: 409
+// @Description - returns the new user's user_id with the tokens
 // @Description - access_token (JWT_ACCESS_TTL, default 24 hours) and refresh_token (JWT_REFRESH_TTL,
 // @Description   default 0: never expires) are HS256 JWTs; send the access token as Authorization: Bearer <token>
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param body body SignUpRequest true "new user"
-// @Success 200 {object} rest.R{data=rest.tokenPairView}
+// @Success 200 {object} rest.R{data=rest.signUpView}
 // @Failure 400 {object} rest.BadRequestResponse
 // @Failure 409 {object} rest.ConflictResponse
 // @Failure 422 {object} rest.UnprocessableContentResponse
@@ -70,7 +77,7 @@ func (s *Server) SignUp() gin.HandlerFunc {
 			return
 		}
 
-		Return(c, toTokenPairView(pair), nil)
+		Return(c, signUpView{UserID: pair.UserID, tokenPairView: toTokenPairView(pair)}, nil)
 	}
 }
 
