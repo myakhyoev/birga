@@ -68,7 +68,7 @@ func (uc *UseCase) Execute(ctx context.Context, req domain.SignUpRequest) (domai
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	req.PhoneNumber = strings.TrimSpace(req.PhoneNumber)
 	req.Relationship = strings.ToLower(strings.TrimSpace(req.Relationship))
-	req.GoalIDs = dedupe(req.GoalIDs)
+	req.GoalIDs = domain.NormalizeIDs(req.GoalIDs)
 	if err := validate(req); err != nil {
 		return domain.TokenPair{}, err
 	}
@@ -166,24 +166,4 @@ func validate(req domain.SignUpRequest) error {
 	}
 
 	return nil
-}
-
-// dedupe writes valid UUIDs in canonical form and drops repeats, keeping the first occurrence's order.
-// Invalid ids are kept as they are for validate to report.
-func dedupe(ids []string) []string {
-	seen := make(map[string]bool, len(ids))
-	out := make([]string, 0, len(ids))
-
-	for _, id := range ids {
-		if u, err := uuid.Parse(strings.TrimSpace(id)); err == nil {
-			id = u.String()
-		}
-
-		if !seen[id] {
-			seen[id] = true
-			out = append(out, id)
-		}
-	}
-
-	return out
 }

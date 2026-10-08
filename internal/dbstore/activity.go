@@ -27,7 +27,7 @@ type dbActivity struct {
 	TitleRu         string    `db:"title_ru"`
 	DescriptionUz   string    `db:"description_uz"`
 	DescriptionRu   string    `db:"description_ru"`
-	Goal            string    `db:"goal"`
+	GoalIDs         []string  `db:"goal_ids"`
 	MinAge          int16     `db:"min_age"`
 	MaxAge          int16     `db:"max_age"`
 	DurationMinutes int16     `db:"duration_minutes"`
@@ -37,7 +37,7 @@ type dbActivity struct {
 }
 
 const activityColumns = `
-	id, title_uz, title_ru, description_uz, description_ru, goal,
+	id, title_uz, title_ru, description_uz, description_ru, goal_ids,
 	min_age, max_age, duration_minutes, is_published, created_at, updated_at`
 
 func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Activity, error) {
@@ -47,14 +47,14 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		sqlClient = r.store.sqlClientByCtx(ctx)
 		q         = `
 		INSERT INTO activities (
-			title_uz, title_ru, description_uz, description_ru, goal,
+			title_uz, title_ru, description_uz, description_ru, goal_ids,
 			min_age, max_age, duration_minutes, is_published
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING ` + activityColumns
 	)
 
 	rows, err := sqlClient.Query(ctx, q,
-		a.TitleUz, a.TitleRu, a.DescriptionUz, a.DescriptionRu, a.Goal,
+		a.TitleUz, a.TitleRu, a.DescriptionUz, a.DescriptionRu, a.GoalIDs,
 		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished,
 	)
 	if err != nil {
@@ -114,20 +114,20 @@ func (r *activityRepo) Delete(ctx context.Context, id string) error {
 }
 
 // Recommend picks one published activity for the child: within its age, matching the optional goal
-// and time limit, never done before if possible, otherwise the one done longest ago. Ties are broken
-// by a hash of the activity id, the child id and the day, so the pick is stable for the whole day
-// and differs between children.
+// and time limit. Activities serving one of the preferred goals come first; within that, never done
+// before if possible, otherwise the one done longest ago. Ties are broken by a hash of the activity
+// id, the child id and the day, so the pick is stable for the whole day and differs between children.
 func (r *activityRepo) Recommend(ctx context.Context, q domain.RecommendationQuery) (domain.Activity, error) {
 	l := logger.FromCtx(ctx, "activityRepo.Recommend").With(zap.String("child_id", q.ChildID))
 
 	var (
-		args  = []any{q.ChildID, q.Age, q.Day.Format(time.DateOnly)}
+		args  = []any{q.ChildID, q.Age, q.Day.Format(time.DateOnly), nonNil(q.PreferGoalIDs)}
 		conds = []string{"a.is_published", "a.deleted_at IS NULL", "a.min_age <= $2", "a.max_age >= $2"}
 	)
 
-	if q.Goal != "" {
-		args = append(args, q.Goal)
-		conds = append(conds, "a.goal = $"+strconv.Itoa(len(args)))
+	if q.GoalID != "" {
+		args = append(args, q.GoalID)
+		conds = append(conds, "$"+strconv.Itoa(len(args))+"::uuid = ANY(a.goal_ids)")
 	}
 
 	if q.MaxMinutes > 0 {
@@ -144,7 +144,7 @@ func (r *activityRepo) Recommend(ctx context.Context, q domain.RecommendationQue
 			GROUP BY activity_id
 		) done ON done.activity_id = a.id
 		WHERE ` + strings.Join(conds, " AND ") + `
-		ORDER BY done.last_on NULLS FIRST, md5(a.id::text || $1::text || $3::text)
+		ORDER BY a.goal_ids && $4::uuid[] DESC, done.last_on NULLS FIRST, md5(a.id::text || $1::text || $3::text)
 		LIMIT 1`
 
 	a, err := r.one(ctx, l, sql, args...)
@@ -241,9 +241,9 @@ func activityWhere(f domain.ActivityFilter) (string, []any) {
 		conds = append(conds, "is_published")
 	}
 
-	if f.Goal != "" {
-		args = append(args, f.Goal)
-		conds = append(conds, "goal = $"+strconv.Itoa(len(args)))
+	if f.GoalID != "" {
+		args = append(args, f.GoalID)
+		conds = append(conds, "$"+strconv.Itoa(len(args))+"::uuid = ANY(goal_ids)")
 	}
 
 	if f.Age > 0 {
@@ -283,8 +283,8 @@ func activitySet(upd domain.ActivityUpdate) (string, []any) {
 		add("description_ru", *upd.DescriptionRu)
 	}
 
-	if upd.Goal != nil {
-		add("goal", *upd.Goal)
+	if upd.GoalIDs != nil {
+		add("goal_ids", upd.GoalIDs)
 	}
 
 	if upd.MinAge != nil {
@@ -313,7 +313,7 @@ func (a dbActivity) toDomain() domain.Activity {
 		TitleRu:         a.TitleRu,
 		DescriptionUz:   a.DescriptionUz,
 		DescriptionRu:   a.DescriptionRu,
-		Goal:            a.Goal,
+		GoalIDs:         nonNil(a.GoalIDs),
 		MinAge:          int(a.MinAge),
 		MaxAge:          int(a.MaxAge),
 		DurationMinutes: int(a.DurationMinutes),
@@ -321,4 +321,13 @@ func (a dbActivity) toDomain() domain.Activity {
 		CreatedAt:       a.CreatedAt,
 		UpdatedAt:       a.UpdatedAt,
 	}
+}
+
+// nonNil turns a nil slice into an empty one: pgx sends nil as NULL, and JSON shows it as null.
+func nonNil(ids []string) []string {
+	if ids == nil {
+		return []string{}
+	}
+
+	return ids
 }

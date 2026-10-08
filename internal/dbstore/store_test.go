@@ -50,18 +50,32 @@ func inRollbackTx(t *testing.T, s *DBStore, fn func(ctx context.Context)) {
 	}
 }
 
-func activity(goal string, minAge, maxAge int, published bool) domain.Activity {
+func activity(goalID string, minAge, maxAge int, published bool) domain.Activity {
 	return domain.Activity{
 		TitleUz: "t", TitleRu: "т", DescriptionUz: "d", DescriptionRu: "д",
-		Goal: goal, MinAge: minAge, MaxAge: maxAge, DurationMinutes: 10, IsPublished: published,
+		GoalIDs: []string{goalID}, MinAge: minAge, MaxAge: maxAge, DurationMinutes: 10, IsPublished: published,
 	}
+}
+
+// testGoal creates a goal named name in all three languages and returns its id.
+func testGoal(t *testing.T, s *DBStore, ctx context.Context, name string) string {
+	t.Helper()
+
+	g, err := s.Goal().Create(ctx, domain.Goal{NameUz: name + " uz", NameRu: name + " ru", NameEn: name + " en"})
+	if err != nil {
+		t.Fatalf("Create goal %s: %v", name, err)
+	}
+
+	return g.ID
 }
 
 func TestActivityRepo_CreateGet(t *testing.T) {
 	s := newTestStore(t)
 
 	inRollbackTx(t, s, func(ctx context.Context) {
-		created, err := s.Activity().Create(ctx, activity(domain.GoalMotor, 2, 4, true))
+		motor := testGoal(t, s, ctx, "motor test")
+
+		created, err := s.Activity().Create(ctx, activity(motor, 2, 4, true))
 		if err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -71,7 +85,7 @@ func TestActivityRepo_CreateGet(t *testing.T) {
 		}
 
 		got, err := s.Activity().Get(ctx, created.ID)
-		if err != nil || got.ID != created.ID || got.MaxAge != 4 {
+		if err != nil || got.ID != created.ID || got.MaxAge != 4 || len(got.GoalIDs) != 1 || got.GoalIDs[0] != motor {
 			t.Fatalf("Get: %+v, %v", got, err)
 		}
 
@@ -90,11 +104,17 @@ func TestActivityRepo_List(t *testing.T) {
 			t.Fatalf("cleanup: %v", err)
 		}
 
+		motor, social := testGoal(t, s, ctx, "motor test"), testGoal(t, s, ctx, "social test")
+
+		both := activity(social, 2, 6, true)
+		both.GoalIDs = append(both.GoalIDs, motor)
+
 		for _, a := range []domain.Activity{
-			activity(domain.GoalMotor, 2, 3, true),
-			activity(domain.GoalMotor, 4, 6, true),
-			activity(domain.GoalSocial, 2, 6, true),
-			activity(domain.GoalMotor, 2, 6, false),
+			activity(motor, 2, 3, true),
+			activity(motor, 4, 6, true),
+			activity(social, 2, 6, true),
+			activity(motor, 2, 6, false),
+			both,
 		} {
 			if _, err := s.Activity().Create(ctx, a); err != nil {
 				t.Fatalf("Create: %v", err)
@@ -106,11 +126,11 @@ func TestActivityRepo_List(t *testing.T) {
 			f     domain.ActivityFilter
 			total int
 		}{
-			{"all", domain.ActivityFilter{Limit: 10}, 4},
-			{"published", domain.ActivityFilter{PublishedOnly: true, Limit: 10}, 3},
-			{"goal+published", domain.ActivityFilter{Goal: domain.GoalMotor, PublishedOnly: true, Limit: 10}, 2},
-			{"age 5", domain.ActivityFilter{Age: 5, PublishedOnly: true, Limit: 10}, 2},
-			{"paged", domain.ActivityFilter{Limit: 1, Offset: 1}, 4},
+			{"all", domain.ActivityFilter{Limit: 10}, 5},
+			{"published", domain.ActivityFilter{PublishedOnly: true, Limit: 10}, 4},
+			{"goal+published", domain.ActivityFilter{GoalID: motor, PublishedOnly: true, Limit: 10}, 3},
+			{"age 5", domain.ActivityFilter{Age: 5, PublishedOnly: true, Limit: 10}, 3},
+			{"paged", domain.ActivityFilter{Limit: 1, Offset: 1}, 5},
 		}
 
 		for _, tc := range cases {

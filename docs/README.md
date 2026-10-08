@@ -2,7 +2,7 @@
 
 Birga is a mobile app for caregivers in Uzbekistan with children aged 2 to 6. Each day it
 suggests one short, adult-led offline activity, chosen by simple rules (child age, the
-caregiver's goal, available time), and tracks completions and streaks. Content is in Uzbek
+goals the caregiver picked at sign-up, available time), and tracks completions and streaks. Content is in Uzbek
 and Russian.
 
 This repository is the Go API behind the app. Today it serves the activity catalogue and a

@@ -93,7 +93,12 @@ func TestUserRepo_RelationshipAndGoals(t *testing.T) {
 			t.Fatalf("unexpected user: %+v", u)
 		}
 
-		// Deleting the goal removes it from the user.
+		a, err := s.Activity().Create(ctx, activity(goal.ID, 2, 6, true))
+		if err != nil {
+			t.Fatalf("Create activity: %v", err)
+		}
+
+		// Deleting the goal removes it from the user and from the activity.
 		if err := s.Goal().Delete(ctx, goal.ID); err != nil {
 			t.Fatalf("Delete goal: %v", err)
 		}
@@ -101,6 +106,10 @@ func TestUserRepo_RelationshipAndGoals(t *testing.T) {
 		got, err := s.User().Get(ctx, u.ID)
 		if err != nil || got.GoalIDs == nil || len(got.GoalIDs) != 0 {
 			t.Fatalf("Get user after goal delete: %+v, %v", got, err)
+		}
+
+		if got, err := s.Activity().Get(ctx, a.ID); err != nil || len(got.GoalIDs) != 0 {
+			t.Fatalf("Get activity after goal delete: %+v, %v", got, err)
 		}
 
 		plain, err := s.User().Create(ctx, domain.User{Username: strPtr("nogoals_test"), PhoneNumber: strPtr("+998900000098")})

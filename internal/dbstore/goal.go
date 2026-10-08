@@ -103,8 +103,8 @@ func (r *goalRepo) Update(ctx context.Context, id string, upd domain.GoalUpdate)
 	return r.one(ctx, l, q, append(args, id)...)
 }
 
-// Delete soft-deletes the goal and removes its id from every user's goal_ids in the same statement,
-// since users.goal_ids cannot carry a foreign key.
+// Delete soft-deletes the goal and removes its id from every user's and every activity's goal_ids in
+// the same statement, since those arrays cannot carry a foreign key.
 func (r *goalRepo) Delete(ctx context.Context, id string) error {
 	l := logger.FromCtx(ctx, "goalRepo.Delete").With(zap.String("id", id))
 
@@ -116,6 +116,9 @@ func (r *goalRepo) Delete(ctx context.Context, id string) error {
 		), unlinked AS (
 			UPDATE users SET goal_ids = array_remove(goal_ids, deleted.id), updated_at = NOW()
 			FROM deleted WHERE deleted.id = ANY(users.goal_ids)
+		), unlinked_activities AS (
+			UPDATE activities SET goal_ids = array_remove(goal_ids, deleted.id), updated_at = NOW()
+			FROM deleted WHERE deleted.id = ANY(activities.goal_ids)
 		)
 		SELECT COUNT(*) FROM deleted`
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"gitlab.com/loyihalar/birga/backend/internal/domain"
@@ -15,17 +16,23 @@ type activityRepo interface {
 	Update(ctx context.Context, id string, upd domain.ActivityUpdate) (domain.Activity, error)
 }
 
+type goalRepo interface {
+	CountActive(ctx context.Context, ids []string) (int, error)
+}
+
 // UseCase applies a partial update to an activity, including publishing and unpublishing it.
 type UseCase struct {
-	l    logger.Logger
-	repo activityRepo
+	l     logger.Logger
+	repo  activityRepo
+	goals goalRepo
 }
 
 // New creates a new activity updater use case.
-func New(l logger.Logger, repo activityRepo) *UseCase {
+func New(l logger.Logger, repo activityRepo, goals goalRepo) *UseCase {
 	return &UseCase{
-		l:    l,
-		repo: repo,
+		l:     l,
+		repo:  repo,
+		goals: goals,
 	}
 }
 
@@ -44,8 +51,23 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.ActivityUp
 		}
 	}
 
+	if upd.GoalIDs != nil {
+		upd.GoalIDs = domain.NormalizeIDs(upd.GoalIDs)
+	}
+
 	if err := validate(upd); err != nil {
 		return domain.Activity{}, err
+	}
+
+	if upd.GoalIDs != nil {
+		n, err := uc.goals.CountActive(ctx, upd.GoalIDs)
+		if err != nil {
+			return domain.Activity{}, err
+		}
+
+		if n != len(upd.GoalIDs) {
+			return domain.Activity{}, errs.ErrUnknownGoals
+		}
 	}
 
 	updated, err := uc.repo.Update(ctx, id, upd)
@@ -64,14 +86,20 @@ func validate(upd domain.ActivityUpdate) error {
 		return errs.Errf(errs.ErrValidation, "title_uz and title_ru cannot be empty")
 	case isBlank(upd.DescriptionUz) || isBlank(upd.DescriptionRu):
 		return errs.Errf(errs.ErrValidation, "description_uz and description_ru cannot be empty")
-	case upd.Goal != nil && !domain.IsKnownGoal(*upd.Goal):
-		return errs.Errf(errs.ErrValidation, "unknown goal %q", *upd.Goal)
+	case upd.GoalIDs != nil && (len(upd.GoalIDs) == 0 || len(upd.GoalIDs) > domain.MaxActivityGoals):
+		return errs.Errf(errs.ErrValidation, "goal_ids must hold 1 to %d goal ids", domain.MaxActivityGoals)
 	case !validAges(upd.MinAge, upd.MaxAge):
 		return errs.Errf(errs.ErrValidation, "age range must be within %d..%d and min_age <= max_age",
 			domain.MinChildAge, domain.MaxChildAge)
 	case upd.DurationMinutes != nil &&
 		(*upd.DurationMinutes <= 0 || *upd.DurationMinutes > domain.MaxActivityDurationMinutes):
 		return errs.Errf(errs.ErrValidation, "duration_minutes must be between 1 and %d", domain.MaxActivityDurationMinutes)
+	}
+
+	for _, id := range upd.GoalIDs {
+		if uuid.Validate(id) != nil {
+			return errs.Errf(errs.ErrValidation, "goal_ids must be goal ids (UUIDs), got %q", id)
+		}
 	}
 
 	return nil

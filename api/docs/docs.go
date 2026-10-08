@@ -77,16 +77,9 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "enum": [
-                            "language",
-                            "motor",
-                            "cognitive",
-                            "social",
-                            "emotional"
-                        ],
                         "type": "string",
-                        "description": "development goal",
-                        "name": "goal",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
                         "in": "query"
                     },
                     {
@@ -222,16 +215,9 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "enum": [
-                            "language",
-                            "motor",
-                            "cognitive",
-                            "social",
-                            "emotional"
-                        ],
                         "type": "string",
-                        "description": "development goal",
-                        "name": "goal",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
                         "in": "query"
                     },
                     {
@@ -298,7 +284,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal is one of: language, motor, cognitive, social, emotional\n- min_age/max_age are child ages in years, within 2..6",
+                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6",
                 "consumes": [
                     "application/json"
                 ],
@@ -496,7 +482,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)\n- send {\"is_published\": true} to publish, false to hide it from the app",
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)\n- goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids\n- send {\"is_published\": true} to publish, false to hide it from the app",
                 "consumes": [
                     "application/json"
                 ],
@@ -1847,7 +1833,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "- only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6\n- goal and minutes narrow the choice; minutes keeps activities with duration_minutes \u003c= minutes\n- activities the child has never done come first, then the one done longest ago;\nties are broken per child and per day, so the pick stays the same all day until it is done\n- 404 when no published activity matches",
+                "description": "- only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6\n- goal_id and minutes narrow the choice; minutes keeps activities with duration_minutes \u003c= minutes\n- without goal_id, activities serving one of the goals the caller picked at sign-up come first\n- then activities the child has never done, then the one done longest ago;\nties are broken per child and per day, so the pick stays the same all day until it is done\n- 404 when no published activity matches",
                 "produces": [
                     "application/json"
                 ],
@@ -1864,16 +1850,9 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "enum": [
-                            "language",
-                            "motor",
-                            "cognitive",
-                            "social",
-                            "emotional"
-                        ],
                         "type": "string",
-                        "description": "development goal",
-                        "name": "goal",
+                        "description": "goal id (UUID) from GET /v1/goals",
+                        "name": "goal_id",
                         "in": "query"
                     },
                     {
@@ -2736,16 +2715,14 @@ const docTemplate = `{
                     "minimum": 1,
                     "example": 10
                 },
-                "goal": {
-                    "type": "string",
-                    "enum": [
-                        "language",
-                        "motor",
-                        "cognitive",
-                        "social",
-                        "emotional"
-                    ],
-                    "example": "cognitive"
+                "goal_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
                 },
                 "is_published": {
                     "type": "boolean",
@@ -3158,16 +3135,14 @@ const docTemplate = `{
                     "minimum": 1,
                     "example": 10
                 },
-                "goal": {
-                    "type": "string",
-                    "enum": [
-                        "language",
-                        "motor",
-                        "cognitive",
-                        "social",
-                        "emotional"
-                    ],
-                    "example": "cognitive"
+                "goal_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
                 },
                 "is_published": {
                     "type": "boolean",
@@ -3329,9 +3304,14 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 10
                 },
-                "goal": {
-                    "type": "string",
-                    "example": "cognitive"
+                "goal_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"
+                    ]
                 },
                 "id": {
                     "type": "string",

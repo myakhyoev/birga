@@ -53,21 +53,22 @@ func (s *Server) Health() gin.HandlerFunc {
 
 // CreateActivityRequest is the body of POST /v1/admin/activities.
 type CreateActivityRequest struct {
-	TitleUz         string `json:"title_uz" example:"Rangli toshlar"`
-	TitleRu         string `json:"title_ru" example:"Цветные камни"`
-	DescriptionUz   string `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
-	DescriptionRu   string `json:"description_ru" example:"Сортируйте камни по цвету"`
-	Goal            string `json:"goal" example:"cognitive" enums:"language,motor,cognitive,social,emotional"`
-	MinAge          int    `json:"min_age" example:"3" minimum:"2" maximum:"6"`
-	MaxAge          int    `json:"max_age" example:"5" minimum:"2" maximum:"6"`
-	DurationMinutes int    `json:"duration_minutes" example:"10" minimum:"1" maximum:"60"`
-	IsPublished     bool   `json:"is_published" example:"true"`
+	TitleUz         string   `json:"title_uz" example:"Rangli toshlar"`
+	TitleRu         string   `json:"title_ru" example:"Цветные камни"`
+	DescriptionUz   string   `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
+	DescriptionRu   string   `json:"description_ru" example:"Сортируйте камни по цвету"`
+	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	MinAge          int      `json:"min_age" example:"3" minimum:"2" maximum:"6"`
+	MaxAge          int      `json:"max_age" example:"5" minimum:"2" maximum:"6"`
+	DurationMinutes int      `json:"duration_minutes" example:"10" minimum:"1" maximum:"60"`
+	IsPublished     bool     `json:"is_published" example:"true"`
 }
 
 // CreateActivity godoc swagger
 // @Summary creates an activity
 // @Description - title/description are required in both Uzbek (uz) and Russian (ru)
-// @Description - goal is one of: language, motor, cognitive, social, emotional
+// @Description - goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an
+// @Description   active goal (422), repeats are stored once
 // @Description - min_age/max_age are child ages in years, within 2..6
 // @Tags admin
 // @Security AdminKey
@@ -94,7 +95,7 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 			TitleRu:         req.TitleRu,
 			DescriptionUz:   req.DescriptionUz,
 			DescriptionRu:   req.DescriptionRu,
-			Goal:            req.Goal,
+			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
 			DurationMinutes: req.DurationMinutes,
@@ -115,7 +116,7 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 // @Tags activities
 // @Produce json
 // @Param age query int false "child age in years (2..6)"
-// @Param goal query string false "development goal" Enums(language,motor,cognitive,social,emotional)
+// @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.activityListView}
@@ -133,7 +134,7 @@ func (s *Server) ListActivities() gin.HandlerFunc {
 // @Security AdminKey
 // @Produce json
 // @Param age query int false "child age in years (2..6)"
-// @Param goal query string false "development goal" Enums(language,motor,cognitive,social,emotional)
+// @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.activityListView}
@@ -164,7 +165,7 @@ func (s *Server) listActivities(publishedOnly bool) gin.HandlerFunc {
 
 		items, total, err := s.activityLister.Execute(c.Request.Context(), domain.ActivityFilter{
 			Age:           age,
-			Goal:          c.Query("goal"),
+			GoalID:        c.Query("goal_id"),
 			PublishedOnly: publishedOnly,
 			Limit:         limit,
 			Offset:        offset,
@@ -237,21 +238,22 @@ func (s *Server) getActivity(includeUnpublished bool) gin.HandlerFunc {
 // UpdateActivityRequest is the body of PATCH /v1/admin/activities/{id}. Omitted or null fields are
 // left unchanged.
 type UpdateActivityRequest struct {
-	TitleUz         *string `json:"title_uz" example:"Rangli toshlar"`
-	TitleRu         *string `json:"title_ru" example:"Цветные камни"`
-	DescriptionUz   *string `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
-	DescriptionRu   *string `json:"description_ru" example:"Сортируйте камни по цвету"`
-	Goal            *string `json:"goal" example:"cognitive" enums:"language,motor,cognitive,social,emotional"`
-	MinAge          *int    `json:"min_age" example:"3" minimum:"2" maximum:"6"`
-	MaxAge          *int    `json:"max_age" example:"5" minimum:"2" maximum:"6"`
-	DurationMinutes *int    `json:"duration_minutes" example:"10" minimum:"1" maximum:"60"`
-	IsPublished     *bool   `json:"is_published" example:"true"`
+	TitleUz         *string  `json:"title_uz" example:"Rangli toshlar"`
+	TitleRu         *string  `json:"title_ru" example:"Цветные камни"`
+	DescriptionUz   *string  `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
+	DescriptionRu   *string  `json:"description_ru" example:"Сортируйте камни по цвету"`
+	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	MinAge          *int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
+	MaxAge          *int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
+	DurationMinutes *int     `json:"duration_minutes" example:"10" minimum:"1" maximum:"60"`
+	IsPublished     *bool    `json:"is_published" example:"true"`
 }
 
 // UpdateActivity godoc swagger
 // @Summary updates an activity partially, including publishing or unpublishing it
 // @Description - only the fields present in the body change; omitted or null fields are kept
 // @Description - same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)
+// @Description - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
 // @Description - send {"is_published": true} to publish, false to hide it from the app
 // @Tags admin
 // @Security AdminKey
@@ -287,7 +289,7 @@ func (s *Server) UpdateActivity() gin.HandlerFunc {
 			TitleRu:         req.TitleRu,
 			DescriptionUz:   req.DescriptionUz,
 			DescriptionRu:   req.DescriptionRu,
-			Goal:            req.Goal,
+			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
 			DurationMinutes: req.DurationMinutes,
@@ -336,7 +338,7 @@ type activityView struct {
 	TitleRu         string    `json:"title_ru" example:"Цветные камни"`
 	DescriptionUz   string    `json:"description_uz"`
 	DescriptionRu   string    `json:"description_ru"`
-	Goal            string    `json:"goal" example:"cognitive"`
+	GoalIDs         []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int       `json:"min_age" example:"3"`
 	MaxAge          int       `json:"max_age" example:"5"`
 	DurationMinutes int       `json:"duration_minutes" example:"10"`
@@ -359,7 +361,7 @@ func toActivityView(a domain.Activity) activityView {
 		TitleRu:         a.TitleRu,
 		DescriptionUz:   a.DescriptionUz,
 		DescriptionRu:   a.DescriptionRu,
-		Goal:            a.Goal,
+		GoalIDs:         a.GoalIDs,
 		MinAge:          a.MinAge,
 		MaxAge:          a.MaxAge,
 		DurationMinutes: a.DurationMinutes,
