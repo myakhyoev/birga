@@ -2,14 +2,21 @@
 
 Guidance for Claude (and any contributor) working in this repository.
 
+## Repository
+
+The code lives on GitHub: https://github.com/Muhammadrizooka/birga (remote `origin`).
+Branches and pull requests go there. The old GitLab project
+`gitlab.com/loyihalar/birga/backend` is kept as the secondary remote `gitlab` and is no
+longer the place to open merge requests. See `docs/setup.md`, "Git remotes".
+
 ## Documentation rule
 
 Technical documentation lives as Markdown in `docs/` (index: `docs/README.md`).
 
-- Every code change updates the related docs in the **same commit / merge request**:
+- Every code change updates the related docs in the **same commit / pull request**:
   architecture, setup and configuration, API, data model, behaviour.
 - If no doc covers the changed area, create one in `docs/` and link it from `docs/README.md`.
-- Mention the doc updates in the merge request description.
+- Mention the doc updates in the pull request description.
 - A change is not done until its docs match the code.
 
 Where things usually go:

@@ -1,7 +1,7 @@
 # Operations
 
 How the API is built, deployed and watched. The server-side Docker Compose stack lives in
-the separate `birga/devops` folder (not yet pushed to GitLab); its `README.md` has the full
+the separate `birga/devops` folder (not yet pushed); its `README.md` has the full
 step-by-step guide. This page summarises what a backend developer needs to know.
 
 ## Images

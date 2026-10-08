@@ -8,6 +8,37 @@
   - [golang-migrate](https://github.com/golang-migrate/migrate) CLI (`migrate`) for `make migrate-*`
   - [golangci-lint](https://golangci-lint.run) v2 for `make lint-go`
 
+## Get the code
+
+The repository lives on GitHub:
+
+```bash
+git clone https://github.com/Muhammadrizooka/birga.git backend
+```
+
+### Git remotes
+
+| Remote | URL | Use |
+|---|---|---|
+| `origin` | `https://github.com/Muhammadrizooka/birga.git` | default: push branches, open pull requests here |
+| `gitlab` | `git@gitlab.com:loyihalar/birga/backend.git` | old home, kept as a secondary remote; not updated automatically |
+
+An existing GitLab checkout is switched over with:
+
+```bash
+git remote rename origin gitlab
+git remote add origin https://github.com/Muhammadrizooka/birga.git
+git fetch origin
+git branch -u origin/main main   # repeat for other local branches
+```
+
+VS Code uses these remotes as they are; push, pull and sync go to GitHub once `origin`
+points there. Sign in to GitHub from VS Code (Accounts menu, or the prompt on the first
+push) so HTTPS pushes are authenticated.
+
+The Go module path is still `gitlab.com/loyihalar/birga/backend`. It only matters for
+imports inside this repository, so it was left unchanged.
+
 ## Run everything in Docker
 
 ```bash
@@ -192,7 +223,8 @@ Commit the regenerated files with the change.
 
 ## CI
 
-`.gitlab-ci.yml` runs on every push:
+`.gitlab-ci.yml` runs on every push to the GitLab remote. Pushes to GitHub do not run it;
+there is no GitHub Actions workflow yet.
 
 | Stage | Job | What |
 |---|---|---|

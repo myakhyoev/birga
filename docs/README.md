@@ -33,12 +33,12 @@ when the API runs.
 
 | Repository | What it holds |
 |---|---|
-| `gitlab.com/loyihalar/birga/backend` | this API (Go) |
-| `birga/devops` (local, not yet on GitLab) | Docker Compose stack for servers: proxy, monitoring, analytics, backups |
+| [`github.com/Muhammadrizooka/birga`](https://github.com/Muhammadrizooka/birga) | this API (Go); the old `gitlab.com/loyihalar/birga/backend` is a secondary mirror |
+| `birga/devops` (local, not yet pushed) | Docker Compose stack for servers: proxy, monitoring, analytics, backups |
 
 ## Keeping these docs current
 
-Every change to the code updates the related document here in the same commit or merge
+Every change to the code updates the related document here in the same commit or pull
 request: architecture, setup, API, data model or behaviour. If the changed area has no
 document yet, add one and link it from the table above. See `CLAUDE.md` at the repository
 root.
