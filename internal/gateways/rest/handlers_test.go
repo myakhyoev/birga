@@ -157,12 +157,12 @@ func TestPingAndHealth(t *testing.T) {
 func TestListActivities(t *testing.T) {
 	s, d := newTestServer("")
 
-	code, r := do(t, s, http.MethodGet, "/v1/activities?age=4&goal=motor&limit=500&offset=10", "", nil)
+	code, r := do(t, s, http.MethodGet, "/v1/activities?age=4&goal_id="+testID+"&limit=500&offset=10", "", nil)
 	if code != http.StatusOK || r.Status != _statusSuccess {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	want := domain.ActivityFilter{Age: 4, Goal: "motor", PublishedOnly: true, Limit: maxPageLimit, Offset: 10}
+	want := domain.ActivityFilter{Age: 4, GoalID: testID, PublishedOnly: true, Limit: maxPageLimit, Offset: 10}
 	if d.lister.got != want {
 		t.Fatalf("filter = %+v, want %+v", d.lister.got, want)
 	}
@@ -216,12 +216,12 @@ func TestCreateActivity(t *testing.T) {
 	s, d := newTestServer(testAdminKey)
 	auth := adminJSON
 
-	body := `{"title_uz":"T","title_ru":"Т","description_uz":"D","description_ru":"Д","goal":"motor","min_age":2,"max_age":4,"duration_minutes":5}`
+	body := `{"title_uz":"T","title_ru":"Т","description_uz":"D","description_ru":"Д","goal_ids":["` + testID + `"],"min_age":2,"max_age":4,"duration_minutes":5}`
 	if code, r := do(t, s, http.MethodPost, "/v1/admin/activities", body, auth); code != http.StatusOK || r.Status != _statusSuccess {
 		t.Fatalf("create: %d %+v", code, r)
 	}
 
-	if d.creator.got.Goal != "motor" || d.creator.got.MaxAge != 4 {
+	if len(d.creator.got.GoalIDs) != 1 || d.creator.got.GoalIDs[0] != testID || d.creator.got.MaxAge != 4 {
 		t.Fatalf("request not mapped: %+v", d.creator.got)
 	}
 

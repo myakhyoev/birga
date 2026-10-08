@@ -65,15 +65,12 @@ definitions:
         maximum: 60
         minimum: 1
         type: integer
-      goal:
-        enum:
-        - language
-        - motor
-        - cognitive
-        - social
-        - emotional
-        example: cognitive
-        type: string
+      goal_ids:
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       is_published:
         example: true
         type: boolean
@@ -345,15 +342,12 @@ definitions:
         maximum: 60
         minimum: 1
         type: integer
-      goal:
-        enum:
-        - language
-        - motor
-        - cognitive
-        - social
-        - emotional
-        example: cognitive
-        type: string
+      goal_ids:
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       is_published:
         example: true
         type: boolean
@@ -469,9 +463,12 @@ definitions:
       duration_minutes:
         example: 10
         type: integer
-      goal:
-        example: cognitive
-        type: string
+      goal_ids:
+        example:
+        - 2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00
+        items:
+          type: string
+        type: array
       id:
         example: 7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11
         type: string
@@ -873,15 +870,9 @@ paths:
         in: query
         name: age
         type: integer
-      - description: development goal
-        enum:
-        - language
-        - motor
-        - cognitive
-        - social
-        - emotional
+      - description: goal id (UUID) from GET /v1/goals
         in: query
-        name: goal
+        name: goal_id
         type: string
       - description: page size (default 20, max 100)
         in: query
@@ -960,15 +951,9 @@ paths:
         in: query
         name: age
         type: integer
-      - description: development goal
-        enum:
-        - language
-        - motor
-        - cognitive
-        - social
-        - emotional
+      - description: goal id (UUID) from GET /v1/goals
         in: query
-        name: goal
+        name: goal_id
         type: string
       - description: page size (default 20, max 100)
         in: query
@@ -1016,7 +1001,8 @@ paths:
       - application/json
       description: |-
         - title/description are required in both Uzbek (uz) and Russian (ru)
-        - goal is one of: language, motor, cognitive, social, emotional
+        - goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an
+        active goal (422), repeats are stored once
         - min_age/max_age are child ages in years, within 2..6
       parameters:
       - description: activity
@@ -1143,6 +1129,7 @@ paths:
       description: |-
         - only the fields present in the body change; omitted or null fields are kept
         - same rules as create; texts cannot be emptied; the resulting age range must stay valid (422)
+        - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
         - send {"is_published": true} to publish, false to hide it from the app
       parameters:
       - description: activity id (UUID)
@@ -2021,8 +2008,9 @@ paths:
     get:
       description: |-
         - only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6
-        - goal and minutes narrow the choice; minutes keeps activities with duration_minutes <= minutes
-        - activities the child has never done come first, then the one done longest ago;
+        - goal_id and minutes narrow the choice; minutes keeps activities with duration_minutes <= minutes
+        - without goal_id, activities serving one of the goals the caller picked at sign-up come first
+        - then activities the child has never done, then the one done longest ago;
         ties are broken per child and per day, so the pick stays the same all day until it is done
         - 404 when no published activity matches
       parameters:
@@ -2031,15 +2019,9 @@ paths:
         name: id
         required: true
         type: string
-      - description: development goal
-        enum:
-        - language
-        - motor
-        - cognitive
-        - social
-        - emotional
+      - description: goal id (UUID) from GET /v1/goals
         in: query
-        name: goal
+        name: goal_id
         type: string
       - description: time available, in minutes
         in: query

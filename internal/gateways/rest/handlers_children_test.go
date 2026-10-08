@@ -105,12 +105,12 @@ func TestUserAuth(t *testing.T) {
 func TestRecommendActivity(t *testing.T) {
 	s, d := newTestServer("")
 
-	code, r := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/recommendation?goal=motor&minutes=10", "", bearer)
+	code, r := do(t, s, http.MethodGet, "/v1/children/"+testChildID+"/recommendation?goal_id="+testID+"&minutes=10", "", bearer)
 	if code != http.StatusOK {
 		t.Fatalf("got %d %+v", code, r)
 	}
 
-	want := activityrecommender.Request{UserID: testUserID, ChildID: testChildID, Goal: "motor", MaxMinutes: 10}
+	want := activityrecommender.Request{UserID: testUserID, ChildID: testChildID, GoalID: testID, MaxMinutes: 10}
 	if d.kids.gotRecommend != want {
 		t.Fatalf("request = %+v, want %+v", d.kids.gotRecommend, want)
 	}

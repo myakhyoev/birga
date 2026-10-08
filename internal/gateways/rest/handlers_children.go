@@ -14,15 +14,16 @@ import (
 // RecommendActivity godoc swagger
 // @Summary today's recommended activity for a child
 // @Description - only the child's parents can ask (404 otherwise); the child's age is clamped to 2..6
-// @Description - goal and minutes narrow the choice; minutes keeps activities with duration_minutes <= minutes
-// @Description - activities the child has never done come first, then the one done longest ago;
+// @Description - goal_id and minutes narrow the choice; minutes keeps activities with duration_minutes <= minutes
+// @Description - without goal_id, activities serving one of the goals the caller picked at sign-up come first
+// @Description - then activities the child has never done, then the one done longest ago;
 // @Description   ties are broken per child and per day, so the pick stays the same all day until it is done
 // @Description - 404 when no published activity matches
 // @Tags children
 // @Security BearerAuth
 // @Produce json
 // @Param id path string true "child id (UUID)"
-// @Param goal query string false "development goal" Enums(language,motor,cognitive,social,emotional)
+// @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param minutes query int false "time available, in minutes"
 // @Success 200 {object} rest.R{data=rest.activityView}
 // @Failure 400 {object} rest.BadRequestResponse
@@ -50,7 +51,7 @@ func (s *Server) RecommendActivity() gin.HandlerFunc {
 		a, err := s.activityRecommender.Execute(c.Request.Context(), activityrecommender.Request{
 			UserID:     currentUserID(c),
 			ChildID:    childID,
-			Goal:       c.Query("goal"),
+			GoalID:     c.Query("goal_id"),
 			MaxMinutes: minutes,
 		})
 		if err != nil {

@@ -1,8 +1,21 @@
--- Starter activities for local development and demos: a few per goal across ages 2 to 6.
--- Safe to run more than once: a row is skipped when an activity with the same title_uz exists.
+-- Starter goals and activities for local development and demos: five goals, a few activities per
+-- goal across ages 2 to 6. Safe to run more than once: a goal is skipped when an active goal already
+-- has its English name, an activity when one with the same title_uz exists.
 -- The texts are drafts; have the content team review them before using this outside development.
-INSERT INTO activities (title_uz, title_ru, description_uz, description_ru, goal, min_age, max_age, duration_minutes, is_published)
-SELECT s.title_uz, s.title_ru, s.description_uz, s.description_ru, s.goal, s.min_age, s.max_age, s.duration_minutes, TRUE
+INSERT INTO goals (name_uz, name_ru, name_en)
+SELECT g.name_uz, g.name_ru, g.name_en
+FROM (VALUES
+    ('Nutq',        'Речь',     'Language'),
+    ('Harakat',     'Моторика', 'Motor skills'),
+    ('Fikrlash',    'Мышление', 'Thinking'),
+    ('Muloqot',     'Общение',  'Social skills'),
+    ('Hissiyotlar', 'Эмоции',   'Emotions')
+) AS g (name_uz, name_ru, name_en)
+WHERE NOT EXISTS (SELECT 1 FROM goals x WHERE LOWER(x.name_en) = LOWER(g.name_en) AND x.deleted_at IS NULL);
+
+-- Each activity names its goal by key; keys maps the key to the goal's English name above.
+INSERT INTO activities (title_uz, title_ru, description_uz, description_ru, goal_ids, min_age, max_age, duration_minutes, is_published)
+SELECT s.title_uz, s.title_ru, s.description_uz, s.description_ru, ARRAY[g.id], s.min_age, s.max_age, s.duration_minutes, TRUE
 FROM (VALUES
     ('Kim qanday ovoz chiqaradi?', 'Кто как говорит?',
      'Hayvonlar rasmini yoki o''yinchoqlarini birma-bir ko''rsating va «Mushuk qanday qiladi?» deb so''rang. Bola javob bersa, ovozni birga takrorlang va hayvon nomini aniq ayting.',
@@ -53,4 +66,9 @@ FROM (VALUES
      'Вместе с ребёнком «надувайте шарик»: глубокий вдох носом, животик надувается, затем медленный выдох ртом. Напоминайте об этом упражнении, когда ребёнок злится или расстроен.',
      'emotional', 2, 5, 5)
 ) AS s (title_uz, title_ru, description_uz, description_ru, goal, min_age, max_age, duration_minutes)
+JOIN (VALUES
+    ('language', 'Language'), ('motor', 'Motor skills'), ('cognitive', 'Thinking'),
+    ('social', 'Social skills'), ('emotional', 'Emotions')
+) AS keys (goal, name_en) ON keys.goal = s.goal
+JOIN goals g ON LOWER(g.name_en) = LOWER(keys.name_en) AND g.deleted_at IS NULL
 WHERE NOT EXISTS (SELECT 1 FROM activities a WHERE a.title_uz = s.title_uz AND a.deleted_at IS NULL);

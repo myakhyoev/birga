@@ -26,7 +26,7 @@ func TestActivityRepo_Update(t *testing.T) {
 	s := newTestStore(t)
 
 	inRollbackTx(t, s, func(ctx context.Context) {
-		a, err := s.Activity().Create(ctx, activity(domain.GoalMotor, 2, 4, false))
+		a, err := s.Activity().Create(ctx, activity(testGoal(t, s, ctx, "motor test"), 2, 4, false))
 		if err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -54,7 +54,7 @@ func TestActivityRepo_Delete(t *testing.T) {
 	s := newTestStore(t)
 
 	inRollbackTx(t, s, func(ctx context.Context) {
-		a, err := s.Activity().Create(ctx, activity(domain.GoalMotor, 2, 4, true))
+		a, err := s.Activity().Create(ctx, activity(testGoal(t, s, ctx, "motor test"), 2, 4, true))
 		if err != nil {
 			t.Fatalf("Create: %v", err)
 		}
@@ -139,7 +139,7 @@ func TestCompletionRepo_DaysAndList(t *testing.T) {
 func publishedActivity(t *testing.T, s *DBStore, ctx context.Context) domain.Activity {
 	t.Helper()
 
-	a, err := s.Activity().Create(ctx, activity(domain.GoalSocial, 2, 6, true))
+	a, err := s.Activity().Create(ctx, activity(testGoal(t, s, ctx, "social test"), 2, 6, true))
 	if err != nil {
 		t.Fatalf("Create activity: %v", err)
 	}
@@ -160,13 +160,15 @@ func TestActivityRepo_Recommend(t *testing.T) {
 			t.Fatalf("empty catalogue: %v", err)
 		}
 
-		short := activity(domain.GoalLanguage, 2, 4, true)
+		language, motor := testGoal(t, s, ctx, "language test"), testGoal(t, s, ctx, "motor test")
+
+		short := activity(language, 2, 4, true)
 		short.DurationMinutes = 5
 
 		a, _ := s.Activity().Create(ctx, short)
-		b, _ := s.Activity().Create(ctx, activity(domain.GoalLanguage, 3, 5, true))
-		_, _ = s.Activity().Create(ctx, activity(domain.GoalLanguage, 5, 6, true))  // too old for 3
-		_, _ = s.Activity().Create(ctx, activity(domain.GoalLanguage, 2, 4, false)) // unpublished
+		b, _ := s.Activity().Create(ctx, activity(language, 3, 5, true))
+		_, _ = s.Activity().Create(ctx, activity(language, 5, 6, true))  // too old for 3
+		_, _ = s.Activity().Create(ctx, activity(language, 2, 4, false)) // unpublished
 
 		first, err := s.Activity().Recommend(ctx, q)
 		if err != nil || (first.ID != a.ID && first.ID != b.ID) {
@@ -192,9 +194,25 @@ func TestActivityRepo_Recommend(t *testing.T) {
 			t.Fatalf("time limit: %+v %v", got, err)
 		}
 
-		q.MaxMinutes, q.Goal = 0, domain.GoalMotor
+		q.MaxMinutes, q.GoalID = 0, motor
 		if _, err := s.Activity().Recommend(ctx, q); !errors.Is(err, errs.ErrNoRecommendation) {
 			t.Fatalf("goal filter: %v", err)
+		}
+
+		// An activity serving a preferred goal wins over never-done ones without it, even once done.
+		c, _ := s.Activity().Create(ctx, activity(motor, 2, 4, true))
+		if _, _, err := s.Completion().Create(ctx, domain.Completion{ChildID: child.ID, ActivityID: c.ID, CompletedOn: oct3}); err != nil {
+			t.Fatalf("Complete: %v", err)
+		}
+
+		q.GoalID, q.PreferGoalIDs = "", []string{motor}
+		if got, err := s.Activity().Recommend(ctx, q); err != nil || got.ID != c.ID {
+			t.Fatalf("preferred goal: %+v %v", got, err)
+		}
+
+		q.PreferGoalIDs = nil
+		if got, err := s.Activity().Recommend(ctx, q); err != nil || got.ID == c.ID {
+			t.Fatalf("no preference: %+v %v", got, err)
 		}
 	})
 }

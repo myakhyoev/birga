@@ -24,7 +24,7 @@ func (m *mockRepo) List(_ context.Context, f domain.ActivityFilter) ([]domain.Ac
 
 func TestExecute_Success(t *testing.T) {
 	repo := &mockRepo{items: []domain.Activity{{ID: "a1"}, {ID: "a2"}}, total: 2}
-	f := domain.ActivityFilter{Age: 4, Goal: domain.GoalMotor, PublishedOnly: true, Limit: 20}
+	f := domain.ActivityFilter{Age: 4, GoalID: "2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00", PublishedOnly: true, Limit: 20}
 
 	items, total, err := New(nil, repo).Execute(context.Background(), f)
 	if err != nil {
@@ -42,7 +42,7 @@ func TestExecute_Success(t *testing.T) {
 
 func TestExecute_Validation(t *testing.T) {
 	for name, f := range map[string]domain.ActivityFilter{
-		"unknown goal": {Goal: "flying"},
+		"bad goal id":  {GoalID: "motor"},
 		"age too low":  {Age: 1},
 		"age too high": {Age: 9},
 	} {

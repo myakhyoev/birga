@@ -9,7 +9,8 @@ that golang-migrate creates records the current version.
 ### `activities`
 
 The curated catalogue of short offline activities. Created by
-`000001_create_activities_table`; `deleted_at` added by `000007_create_activity_completions`.
+`000001_create_activities_table`; `deleted_at` added by `000007_create_activity_completions`;
+`goal` replaced by `goal_ids` in `000011_link_activities_to_goals`.
 Rows are soft-deleted by setting `deleted_at`.
 
 | Column | Type | Null | Default | Notes |
@@ -19,7 +20,7 @@ Rows are soft-deleted by setting `deleted_at`.
 | `title_ru` | `TEXT` | no | | Russian title |
 | `description_uz` | `TEXT` | no | | Uzbek instructions |
 | `description_ru` | `TEXT` | no | | Russian instructions |
-| `goal` | `TEXT` | no | | development goal, see below |
+| `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |
 | `duration_minutes` | `SMALLINT` | no | | expected length |
@@ -36,13 +37,28 @@ Constraints:
 Indexes:
 
 - primary key on `id`
-- `activities_published_goal_idx` on `(goal) WHERE is_published AND deleted_at IS NULL`, for
-  the public list filtered by goal (recreated with the `deleted_at` condition by `000007`)
+- `activities_published_goal_ids_idx`, GIN on `(goal_ids) WHERE is_published AND deleted_at IS NULL`,
+  for the goal filter and the goal preference of the recommendation (`000011`; it replaces
+  `activities_published_goal_idx` on the old `goal` column)
 
-Goals are plain text, not an enum type or lookup table. The allowed values (`language`,
-`motor`, `cognitive`, `social`, `emotional`) are checked in Go
-(`domain.IsKnownGoal`). The application additionally caps `duration_minutes` at 60, which
-the database does not enforce.
+Like `users.goal_ids`, `goal_ids` cannot carry a foreign key. The admin API requires 1 to 5
+active goal ids (`domain.MaxActivityGoals`, checked with `goalRepo.CountActive`), and deleting a
+goal removes its id from every activity (see [`goals`](#goals)). The application additionally
+caps `duration_minutes` at 60, which the database does not enforce.
+
+Until `000011` an activity had one fixed text key (`language`, `motor`, `cognitive`, `social`,
+`emotional`). The migration maps each key to a goal: it reuses an active goal that already has
+one of the names below in any language (or whose English name equals the key), otherwise it
+creates the goal, but only for keys some activity uses. The down migration restores the key
+from the first goal by the same names, falling back to `cognitive`; goals it created stay.
+
+| Old key | `name_uz` | `name_ru` | `name_en` |
+|---|---|---|---|
+| `language` | Nutq | Речь | Language |
+| `motor` | Harakat | Моторика | Motor skills |
+| `cognitive` | Fikrlash | Мышление | Thinking |
+| `social` | Muloqot | Общение | Social skills |
+| `emotional` | Hissiyotlar | Эмоции | Emotions |
 
 Soft delete rather than a hard delete keeps `activity_completions` rows pointing at a real
 activity, so history and streaks survive. Every repository read filters `deleted_at IS NULL`.
@@ -51,9 +67,10 @@ Repository (`store.Activity()`): `Create`, `Get`, `List` (filters and paging), `
 (partial; a failed CHECK becomes `ErrValidation`), `Delete` (soft) and `Recommend` (see
 [api.md](api.md#recommendation)).
 
-A starter set of 12 published activities (two or three per goal, Uzbek and Russian) is in
-`seeds/activities.sql`; load it with `make seed` ([setup.md](setup.md#starter-activities)).
-It is data, not a migration, and skips titles that already exist.
+A starter set of the five goals above and 12 published activities (two or three per goal, Uzbek
+and Russian) is in `seeds/activities.sql`; load it with `make seed`
+([setup.md](setup.md#starter-activities)). It is data, not a migration, and skips goals whose
+English name and activities whose title already exist.
 
 ### `users`
 
@@ -91,8 +108,8 @@ rows with `deleted_at IS NULL` and maps violations of `users_username_uniq` and
 ### `goals`
 
 Development goals a user picks at sign-up, named in three languages. Created by
-`000010_add_relationship_and_goals`. Rows are soft-deleted by setting `deleted_at`. Not related
-to `activities.goal`, which is a fixed text key.
+`000010_add_relationship_and_goals`. Rows are soft-deleted by setting `deleted_at`. Activities
+point at goals through `activities.goal_ids`.
 
 | Column | Type | Null | Default | Notes |
 |---|---|---|---|---|
@@ -109,11 +126,13 @@ Indexes: `goals_name_uz_uniq`, `goals_name_ru_uniq`, `goals_name_en_uniq`, uniqu
 ignoring case; deleting a goal frees its names. `internal/dbstore/goal.go` maps a violation to
 409 (`errs.ErrGoalNameTaken`).
 
-`users.goal_ids` points at goals, but Postgres cannot put a foreign key on array elements, so:
+`users.goal_ids` and `activities.goal_ids` point at goals, but Postgres cannot put a foreign key
+on array elements, so:
 
-- sign-up checks that every id is an active goal (`goalRepo.CountActive`) before inserting the user;
-- `goalRepo.Delete` soft-deletes the goal and removes its id from every `users.goal_ids`
-  (`array_remove`) in one statement, so users never keep a deleted goal.
+- sign-up and the activity admin endpoints check that every id is an active goal
+  (`goalRepo.CountActive`) before writing;
+- `goalRepo.Delete` soft-deletes the goal and removes its id from every `users.goal_ids` and
+  `activities.goal_ids` (`array_remove`) in one statement, so nothing keeps a deleted goal.
 
 Repository (`store.Goal()`): `Create`, `Get`, `List` (all active, oldest first), `CountActive`,
 `Update` (partial), `Delete` (soft, see above).

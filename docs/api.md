@@ -23,7 +23,7 @@ Every response, success or failure, has the same shape:
 | error_code | HTTP | Meaning | Typical cause |
 |---:|---:|---|---|
 | 0 | 200 | success | |
-| -10 | 422 | validation error | business rule broken, e.g. `unknown goal "flying"`, wrong OTP code, unsupported or too large upload |
+| -10 | 422 | validation error | business rule broken, e.g. `duration_minutes must be between 1 and 60`, wrong OTP code, unsupported or too large upload |
 | -11 | 400 | malformed request | bad JSON, non-integer `limit`, invalid UUID |
 | -20 | 401 | unauthorized | missing or wrong `X-Admin-Key`; missing, invalid, expired or replaced access token; invalid, expired or revoked refresh token; wrong username or password at login |
 | -21 | 403 | forbidden | admin API disabled (no `ADMIN_API_KEY` configured and no admin token sent); access token of a role the endpoint does not allow; profile phone change or password reset without the matching OTP verification |
@@ -116,15 +116,16 @@ Query parameters for the list:
 | Param | Type | Rules |
 |---|---|---|
 | `age` | int | child age in years, 2 to 6; matches activities where `min_age <= age <= max_age` |
-| `goal` | string | one of `language`, `motor`, `cognitive`, `social`, `emotional` |
+| `goal_id` | UUID string | a goal id from [`GET /v1/goals`](#goals); matches activities whose `goal_ids` contain it |
 | `limit`, `offset` | int | see [Pagination](#pagination) |
 
-An `age` or `goal` outside the allowed values returns 422; a non-integer `age` returns 400.
+An `age` outside 2..6 or a `goal_id` that is not a UUID returns 422; a non-integer `age` returns
+400. A UUID that is not a goal simply matches nothing.
 
 Example:
 
 ```bash
-curl 'localhost:8080/v1/activities?age=4&goal=cognitive&limit=10'
+curl 'localhost:8080/v1/activities?age=4&goal_id='$GOAL'&limit=10'
 ```
 
 ### Activities (admin)
@@ -145,7 +146,7 @@ Create body:
   "title_ru": "Цветные камни",
   "description_uz": "Toshlarni rangi bo'yicha saralang",
   "description_ru": "Сортируйте камни по цвету",
-  "goal": "cognitive",
+  "goal_ids": ["2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"],
   "min_age": 3,
   "max_age": 5,
   "duration_minutes": 10,
@@ -156,7 +157,8 @@ Create body:
 Validation (`usecases/activity_creator`), all returning 422:
 
 - titles and descriptions are required in both languages (whitespace is trimmed first);
-- `goal` must be a known goal;
+- `goal_ids` must hold 1 to 5 UUIDs (repeats are stored once), and each must be an active goal
+  from [`GET /v1/goals`](#goals) (`goals contains ids that are not active goals, ...`);
 - `2 <= min_age <= max_age <= 6`;
 - `1 <= duration_minutes <= 60`.
 
@@ -169,7 +171,8 @@ curl -X POST localhost:8080/v1/admin/activities \
 ```
 
 Update (`PATCH`) takes the same fields, all optional. Omitted or `null` fields are kept. Each
-given field follows the create rules (texts cannot be emptied); an age that is valid alone but
+given field follows the create rules (texts cannot be emptied; `goal_ids`, when sent, replaces the
+whole list and cannot be emptied); an age that is valid alone but
 not together with the stored one, such as `min_age` above the stored `max_age`, is rejected
 by the database check, also with 422. An empty body is 422 (`nothing to update`).
 `updated_at` is set on every update.
@@ -187,7 +190,8 @@ child's history and streak do not change. There is no undelete endpoint.
 ### Goals
 
 Development goals a user picks at sign-up (for example "Speech development"), named in Uzbek,
-Russian and English. Not the same as an activity's `goal` key above, which is a fixed list.
+Russian and English. Activities point at the goals they serve (`goal_ids`), and the
+[recommendation](#recommendation) prefers activities serving the caller's goals.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
@@ -218,7 +222,9 @@ Validation (`usecases/goal_creator`, `usecases/goal_updater`):
 PATCH takes the same fields, all optional; omitted or `null` fields are kept.
 
 Delete sets `deleted_at`: the goal leaves `/v1/goals`, sign-up refuses its id, and its id is
-removed from every user's `goal_ids` in the same statement. Its names can be used again. A
+removed from every user's and every activity's `goal_ids` in the same statement. Its names can be
+used again. An activity whose only goal is deleted keeps working but no longer matches any goal
+filter or preference until an admin gives it a new goal. A
 second delete is 404; there is no undelete.
 
 ```bash
@@ -346,7 +352,7 @@ Query parameters, both optional:
 
 | Param | Type | Rules |
 |---|---|---|
-| `goal` | string | one of the goals; 422 otherwise |
+| `goal_id` | UUID string | only activities serving this goal (from [`GET /v1/goals`](#goals)); 422 if not a UUID |
 | `minutes` | int | time available; keeps activities with `duration_minutes <= minutes`; 400 if not an integer, 422 if negative |
 
 Rules (`activityRepo.Recommend`), all in one query:
@@ -354,8 +360,13 @@ Rules (`activityRepo.Recommend`), all in one query:
 1. Candidates are published, non-deleted activities whose age range contains the child's age.
    The age is clamped to 2..6 first, so a 1-year-old gets 2-year activities and a 7-year-old
    gets 6-year ones.
-2. Activities the child has never completed come first, then the one completed longest ago.
-3. Ties are broken by `md5(activity id || child id || date)`, so the pick stays the same all
+2. Without `goal_id`, activities serving at least one of the goals the caller picked at sign-up
+   (`users.goal_ids`) come first. A caller with no goals gets no preference. With two parents,
+   each sees the pick for their own goals.
+3. Within that, activities the child has never completed come first, then the one completed
+   longest ago. A preferred-goal activity done yesterday still beats a never-done one outside
+   the caller's goals, so a small catalogue cycles through the caller's goals.
+4. Ties are broken by `md5(activity id || child id || date)`, so the pick stays the same all
    day, changes the next day, and differs between children. Completing it moves it to the
    back, so asking again after a completion suggests the next activity.
 
@@ -364,7 +375,7 @@ Response: an [activity object](#activity-object).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
-  'localhost:8080/v1/children/'$CHILD'/recommendation?goal=emotional&minutes=10'
+  'localhost:8080/v1/children/'$CHILD'/recommendation?minutes=10'
 ```
 
 #### Complete
@@ -820,7 +831,7 @@ Deleted goals are never returned, so `deleted_at` is not part of the object.
 | `id` | UUID string | generated by the database |
 | `title_uz`, `title_ru` | string | |
 | `description_uz`, `description_ru` | string | |
-| `goal` | string | development goal |
+| `goal_ids` | array of UUID strings | the [goals](#goals) the activity serves; normally 1 to 5, empty only if its goals were deleted |
 | `min_age`, `max_age` | int | years, inclusive |
 | `duration_minutes` | int | |
 | `is_published` | bool | hidden from public endpoints when false |

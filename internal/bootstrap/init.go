@@ -279,10 +279,10 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 	)
 
 	return &useCases{
-		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity()),
+		activityCreator: activitycreator.New(l.Named("usecase.activity_creator"), store.Activity(), store.Goal()),
 		activityLister:  activitylister.New(l.Named("usecase.activity_lister"), store.Activity()),
 		activityGetter:  activitygetter.New(l.Named("usecase.activity_getter"), store.Activity()),
-		activityUpdater: activityupdater.New(l.Named("usecase.activity_updater"), store.Activity()),
+		activityUpdater: activityupdater.New(l.Named("usecase.activity_updater"), store.Activity(), store.Goal()),
 		activityDeleter: activitydeleter.New(l.Named("usecase.activity_deleter"), store.Activity()),
 
 		goalCreator: goalcreator.New(l.Named("usecase.goal_creator"), store.Goal()),
@@ -294,7 +294,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 		childCreator:        childcreator.New(l.Named("usecase.child_creator"), store, store.Child()),
 		childGetter:         childgetter.New(l.Named("usecase.child_getter"), store.Child()),
 		childLister:         childlister.New(l.Named("usecase.child_lister"), store.Child()),
-		activityRecommender: activityrecommender.New(l.Named("usecase.activity_recommender"), store.Child(), store.Activity()),
+		activityRecommender: activityrecommender.New(l.Named("usecase.activity_recommender"), store.Child(), store.User(), store.Activity()),
 		completionRecorder: completionrecorder.New(l.Named("usecase.completion_recorder"),
 			store.Child(), store.Activity(), store.Completion()),
 		completionLister: completionlister.New(l.Named("usecase.completion_lister"), store.Child(), store.Completion()),
