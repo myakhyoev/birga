@@ -33,7 +33,7 @@ when the API runs.
 
 | Repository | What it holds |
 |---|---|
-| [`github.com/Muhammadrizooka/birga`](https://github.com/Muhammadrizooka/birga) | this API (Go); the old `gitlab.com/loyihalar/birga/backend` is a secondary mirror |
+| [`github.com/myakhyoev/birga`](https://github.com/myakhyoev/birga) | this API (Go); the old `gitlab.com/loyihalar/birga/backend` is a secondary mirror |
 | `birga/devops` (local, not yet pushed) | Docker Compose stack for servers: proxy, monitoring, analytics, backups |
 
 ## Keeping these docs current

@@ -13,21 +13,21 @@
 The repository lives on GitHub:
 
 ```bash
-git clone https://github.com/Muhammadrizooka/birga.git backend
+git clone https://github.com/myakhyoev/birga.git backend
 ```
 
 ### Git remotes
 
 | Remote | URL | Use |
 |---|---|---|
-| `origin` | `https://github.com/Muhammadrizooka/birga.git` | default: push branches, open pull requests here |
+| `origin` | `https://github.com/myakhyoev/birga.git` | default: push branches, open pull requests here |
 | `gitlab` | `git@gitlab.com:loyihalar/birga/backend.git` | old home, kept as a secondary remote; not updated automatically |
 
 An existing GitLab checkout is switched over with:
 
 ```bash
 git remote rename origin gitlab
-git remote add origin https://github.com/Muhammadrizooka/birga.git
+git remote add origin https://github.com/myakhyoev/birga.git
 git fetch origin
 git branch -u origin/main main   # repeat for other local branches
 ```

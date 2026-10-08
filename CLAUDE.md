@@ -4,7 +4,7 @@ Guidance for Claude (and any contributor) working in this repository.
 
 ## Repository
 
-The code lives on GitHub: https://github.com/Muhammadrizooka/birga (remote `origin`).
+The code lives on GitHub: https://github.com/myakhyoev/birga (remote `origin`).
 Branches and pull requests go there. The old GitLab project
 `gitlab.com/loyihalar/birga/backend` is kept as the secondary remote `gitlab` and is no
 longer the place to open merge requests. See `docs/setup.md`, "Git remotes".
