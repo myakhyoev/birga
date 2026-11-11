@@ -181,6 +181,7 @@ Create body:
   "max_age": 5,
   "duration_minutes": 10,
   "difficulty": "normal",
+  "photo_id": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a",
   "is_published": true
 }
 ```
@@ -196,6 +197,9 @@ Validation (`usecases/activity_creator`), all returning 422:
   [the difficulty switch](#difficulty-switch) swaps to, so each goal and age needs some of each;
 - `goal_ids` must hold 1 to 5 UUIDs (repeats are stored once), and each must be an active goal
   from [`GET /v1/goals`](#goals) (`goals contains ids that are not active goals, ...`);
+- `photo_id` is optional: the activity's picture, an image uploaded with
+  [`POST /v1/admin/media`](#media-public) (or `POST /v1/media`); not a UUID or not an uploaded
+  media id is 422 (`photo_id is not an uploaded media id, ...`);
 - `2 <= min_age <= max_age <= 6`;
 - `1 <= duration_minutes <= 60`.
 
@@ -208,7 +212,7 @@ curl -X POST localhost:8080/v1/admin/activities \
 ```
 
 Update (`PATCH`) takes the same fields, all optional. Omitted or `null` fields are kept. Each
-given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*`, `easier_*` and `harder_*` can, `difficulty` must be one of the three levels; `goal_ids`, when sent, replaces the
+given field follows the create rules (titles and descriptions cannot be emptied, `main_idea_*`, `easier_*` and `harder_*` can, `difficulty` must be one of the three levels; `photo_id` `""` removes the picture; `goal_ids`, when sent, replaces the
 whole list and cannot be emptied); an age that is valid alone but
 not together with the stored one, such as `min_age` above the stored `max_age`, is rejected
 by the database check, also with 422. An empty body is 422 (`nothing to update`).
@@ -381,13 +385,15 @@ Validation (`usecases/post_creator`), all returning 422:
   hides them;
 - `video_id` must be an MP4 or WebM video uploaded with `POST /v1/admin/media` (an image or an
   unknown id is `video_id is not an uploaded video, ...`);
+- `photo_id` is optional: the cover picture, an image uploaded with `POST /v1/admin/media`
+  (unknown: 422 `photo_id is not an uploaded media id, ...`);
 - `goal_id` must be an active goal;
 - `duration` is in minutes, a decimal (`4.2` is 4:12), more than 0 and at most 600;
 - `2 <= min_age <= max_age <= 6`;
 - `status` as for articles; omitted means `in_review`.
 
 Update (`PATCH`) takes the same fields, all optional, with the same rules; titles cannot be
-emptied, `suggestion_*`/`questions_*: ""` removes them. Delete sets `deleted_at`: the post
+emptied, `suggestion_*`/`questions_*: ""` removes them, `photo_id: ""` removes the cover. Delete sets `deleted_at`: the post
 disappears from every list, get, daily video and history.
 
 ### Daily videos: posts (signed in)
@@ -1560,6 +1566,8 @@ Deleted goals are never returned, so `deleted_at` is not part of the object.
 | `easier_uz`, `easier_ru`, `easier_en` | string | the "Osonroq" variant (Figma 41, a Birga Pro box in the app); `""` when there is none |
 | `harder_uz`, `harder_ru`, `harder_en` | string | the "Qiyinroq" variant; `""` when there is none. The API always returns both; the app shows them to Pro users and a locked box to the others |
 | `difficulty` | string | `easy`, `normal` or `difficult` ("Osonroq", "Odatdagi", "Qiyinroq"); see [Difficulty switch](#difficulty-switch) |
+| `photo_id` | UUID string or `null` | the activity's picture (card and activity page); `null` without one, then the app shows its own placeholder. The starter activities get theirs from [seed photos](operations.md#seed-photos) |
+| `photo_url` | string or `null` | `/v1/media/{photo_id}`, see [Showing an image](#showing-an-image); `null` without a picture |
 | `goal_ids` | array of UUID strings | the [goals](#goals) the activity serves; normally 1 to 5, empty only if its goals were deleted |
 | `min_age`, `max_age` | int | years, inclusive |
 | `duration_minutes` | int | |
@@ -1597,6 +1605,8 @@ Soft-deleted articles are never returned, so `deleted_at` is not part of the obj
 | `title_uz`, `title_ru`, `title_en` | string | |
 | `video_id` | UUID string | the uploaded video |
 | `video_url` | string | `/v1/media/{video_id}`; play it from the API base address |
+| `photo_id` | UUID string or `null` | the cover picture shown on video cards and before the video plays; `null` without one (the app shows its own placeholder). Admin create and update take it: an image from `POST /v1/admin/media` (unknown: 422); update `""` removes it |
+| `photo_url` | string or `null` | `/v1/media/{photo_id}`, see [Showing an image](#showing-an-image); `null` without a cover |
 | `goal_id` | UUID string | the [goal](#goals) the video serves (the tag, e.g. "Nutq") |
 | `topic_id` | UUID string or `null` | optional [topic](#topics) tag, same rules as on articles; also on the `next` previews |
 | `min_age`, `max_age` | int | years, inclusive ("3–5 yosh") |

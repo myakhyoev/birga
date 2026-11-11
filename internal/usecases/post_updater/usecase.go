@@ -92,6 +92,8 @@ func validate(upd domain.PostUpdate) error {
 		return errs.Errf(errs.ErrValidation, "title_uz, title_ru and title_en cannot be empty")
 	case upd.VideoID != nil && uuid.Validate(*upd.VideoID) != nil:
 		return errs.Errf(errs.ErrValidation, "video_id must be a media id (UUID) from POST /v1/admin/media")
+	case upd.PhotoID != nil && *upd.PhotoID != "" && uuid.Validate(*upd.PhotoID) != nil:
+		return errs.Errf(errs.ErrValidation, "photo_id must be a media id (UUID) of an uploaded image, or \"\" to remove the cover")
 	case upd.GoalID != nil && uuid.Validate(*upd.GoalID) != nil:
 		return errs.Errf(errs.ErrValidation, "goal_id must be a goal id (UUID) from GET /v1/goals")
 	case !inRange(upd.MinAge) || !inRange(upd.MaxAge) ||

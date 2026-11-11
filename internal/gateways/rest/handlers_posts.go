@@ -15,7 +15,9 @@ type CreatePostRequest struct {
 	TitleRu string `json:"title_ru" example:"Песня о цветах"`
 	TitleEn string `json:"title_en" example:"The colours song"`
 	VideoID string `json:"video_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	GoalID  string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	// PhotoID is the optional cover picture, an image from POST /v1/admin/media; null means none.
+	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	GoalID  string  `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	// TopicID is the optional topic tag from GET /v1/topics; null means none.
 	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	MinAge  int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
@@ -36,6 +38,7 @@ type CreatePostRequest struct {
 // @Description - title is required in Uzbek, Russian and English; suggestion_* ("Tavsiya" line) and
 // @Description   questions_* ("ask after watching" box, one question per line) are optional, "" hides them
 // @Description - video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)
+// @Description - photo_id is an optional cover picture, an image uploaded with POST /v1/admin/media (422 if unknown)
 // @Description - goal_id is one active goal from GET /v1/goals (422 if unknown)
 // @Description - topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)
 // @Description - duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600
@@ -66,6 +69,7 @@ func (s *Server) CreatePost() gin.HandlerFunc {
 			TitleRu:      req.TitleRu,
 			TitleEn:      req.TitleEn,
 			VideoID:      req.VideoID,
+			PhotoID:      req.PhotoID,
 			GoalID:       req.GoalID,
 			TopicID:      req.TopicID,
 			MinAge:       req.MinAge,
@@ -171,6 +175,8 @@ type UpdatePostRequest struct {
 	TitleRu *string `json:"title_ru" example:"Песня о цветах"`
 	TitleEn *string `json:"title_en" example:"The colours song"`
 	VideoID *string `json:"video_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
+	// PhotoID "" removes the cover picture.
+	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	GoalID  *string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	// TopicID "" removes the topic; omitted or null keeps it.
 	TopicID      *string  `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
@@ -189,7 +195,7 @@ type UpdatePostRequest struct {
 // UpdatePost godoc swagger
 // @Summary updates a video post partially, including its status
 // @Description - only the fields present in the body change; omitted or null fields are kept
-// @Description - same rules as create; titles cannot be emptied; suggestion_*/questions_* "" removes them
+// @Description - same rules as create; titles cannot be emptied; suggestion_*/questions_* "" removes them; photo_id "" removes the cover
 // @Description - the resulting age range must stay valid (422)
 // @Description - send {"status": "published"} to show it in the app, "in_review" or "unpublished" to hide it
 // @Tags admin
@@ -226,6 +232,7 @@ func (s *Server) UpdatePost() gin.HandlerFunc {
 			TitleRu:      req.TitleRu,
 			TitleEn:      req.TitleEn,
 			VideoID:      req.VideoID,
+			PhotoID:      req.PhotoID,
 			GoalID:       req.GoalID,
 			TopicID:      req.TopicID,
 			MinAge:       req.MinAge,
@@ -449,7 +456,11 @@ type postView struct {
 	VideoID string `json:"video_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	// VideoURL plays the video without a token: it redirects (302) to a short-lived link.
 	VideoURL string `json:"video_url" example:"/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
-	GoalID   string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	// PhotoID is the cover picture, a media id; null without one.
+	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	// PhotoURL is where to load the cover from (GET, no token); null without one.
+	PhotoURL *string `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	GoalID   string  `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	// TopicID is the optional topic tag from GET /v1/topics; null means none.
 	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	MinAge  int     `json:"min_age" example:"3"`
@@ -525,6 +536,8 @@ func toPostView(p domain.Post) postView {
 		TitleEn:      p.TitleEn,
 		VideoID:      p.VideoID,
 		VideoURL:     mediaPath(p.VideoID),
+		PhotoID:      p.PhotoID,
+		PhotoURL:     photoURL(p.PhotoID),
 		GoalID:       p.GoalID,
 		TopicID:      p.TopicID,
 		MinAge:       p.MinAge,

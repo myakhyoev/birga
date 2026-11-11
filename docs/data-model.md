@@ -28,6 +28,7 @@ Rows are soft-deleted by setting `deleted_at`.
 | `easier_uz`, `easier_ru`, `easier_en` | `TEXT` | no | `''` | the "Osonroq" variant (Birga Pro), optional (added by `000021_activity_variants_today_extras`) |
 | `harder_uz`, `harder_ru`, `harder_en` | `TEXT` | no | `''` | the "Qiyinroq" variant (Birga Pro), optional (`000021`) |
 | `difficulty` | `TEXT` | no | `'normal'` | `easy`, `normal` or `difficult` (added by `000025_activity_difficulty`). Plans and goal picks take normal ones first; the "Osonroq / Odatdagi / Qiyinroq" switch swaps an activity for another of the chosen level |
+| `photo_id` | `UUID` | yes | | the activity's picture, references `media(id)` `ON DELETE SET NULL` (added by `000027_content_photos`); `NULL` means none |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |
@@ -444,6 +445,7 @@ setting `deleted_at`.
 | `id` | `UUID` | no | `gen_random_uuid()` | primary key |
 | `title_uz`, `title_ru`, `title_en` | `TEXT` | no | | required by the API |
 | `video_id` | `UUID` | no | | references `media(id)`; the API accepts only `video/*` media |
+| `photo_id` | `UUID` | yes | | cover picture, references `media(id)` `ON DELETE SET NULL` (`000027_content_photos`); `NULL` means none |
 | `goal_id` | `UUID` | no | | references `goals(id)` |
 | `min_age`, `max_age` | `SMALLINT` | no | | `2 <= min_age <= max_age <= 6` (`posts_age_range_chk`) |
 | `duration` | `NUMERIC(6,2)` | no | | minutes, `> 0` (`posts_duration_chk`); the API caps it at 600 |
@@ -592,6 +594,15 @@ something to show. Real content is made in the dashboard; edit or delete the sam
   `media` row with a `video/*` content type. With no uploaded video they are skipped; upload one
   in the dashboard and run the migration again by hand
   (`psql "$POSTGRES_URL" -f migrations/000024_sample_content.up.sql`), or make the videos there.
+
+### Seed photos (`seeds/photos`)
+
+Not a migration: after the migrations, every deploy runs `birga_backend seed-photos seeds/photos`,
+which uploads the starter pictures to S3 (one `media` row each) and sets `photo_id` on the
+starter activities (matched by `title_uz`), the sample articles and the sample videos (matched
+by id) that have no picture yet. A picture an admin chose is never replaced, and a row that
+already has one is skipped, so running it again adds nothing. See
+[operations.md, "Seed photos"](operations.md#seed-photos).
 
 ## Conventions
 

@@ -69,6 +69,7 @@ type CreateActivityRequest struct {
 	HarderRu        string   `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
 	HarderEn        string   `json:"harder_en" example:"Also sort the stones by size"`
 	Difficulty      string   `json:"difficulty" example:"normal" enums:"easy,normal,difficult"`
+	PhotoID         *string  `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int      `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          int      `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -84,6 +85,7 @@ type CreateActivityRequest struct {
 // @Description - min_age/max_age are child ages in years, within 2..6
 // @Description - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
 // @Description - difficulty is easy, normal or difficult (default normal); plans pick normal ones first
+// @Description - photo_id is an optional picture, an id from POST /v1/media or /v1/admin/media (422 if unknown)
 // @Tags admin
 // @Security AdminKey
 // @Accept json
@@ -121,6 +123,7 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 			HarderRu:        req.HarderRu,
 			HarderEn:        req.HarderEn,
 			Difficulty:      req.Difficulty,
+			PhotoID:         req.PhotoID,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -284,22 +287,24 @@ func (s *Server) getActivity(includeUnpublished bool) gin.HandlerFunc {
 // UpdateActivityRequest is the body of PATCH /v1/admin/activities/{id}. Omitted or null fields are
 // left unchanged.
 type UpdateActivityRequest struct {
-	TitleUz         *string  `json:"title_uz" example:"Rangli toshlar"`
-	TitleRu         *string  `json:"title_ru" example:"Цветные камни"`
-	TitleEn         *string  `json:"title_en" example:"Colourful stones"`
-	DescriptionUz   *string  `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
-	DescriptionRu   *string  `json:"description_ru" example:"Сортируйте камни по цвету"`
-	DescriptionEn   *string  `json:"description_en" example:"Sort the stones by colour"`
-	MainIdeaUz      *string  `json:"main_idea_uz" example:"Bola ranglarni nomlab, ularni farqlashni o'rganadi."`
-	MainIdeaRu      *string  `json:"main_idea_ru" example:"Называя цвета, ребёнок учится их различать."`
-	MainIdeaEn      *string  `json:"main_idea_en" example:"Naming colours helps the child tell them apart."`
-	EasierUz        *string  `json:"easier_uz" example:"Faqat ikki rangdan boshlang"`
-	EasierRu        *string  `json:"easier_ru" example:"Начните только с двух цветов"`
-	EasierEn        *string  `json:"easier_en" example:"Start with only two colours"`
-	HarderUz        *string  `json:"harder_uz" example:"Toshlarni o'lchami bo'yicha ham saralang"`
-	HarderRu        *string  `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
-	HarderEn        *string  `json:"harder_en" example:"Also sort the stones by size"`
-	Difficulty      *string  `json:"difficulty" example:"easy" enums:"easy,normal,difficult"`
+	TitleUz       *string `json:"title_uz" example:"Rangli toshlar"`
+	TitleRu       *string `json:"title_ru" example:"Цветные камни"`
+	TitleEn       *string `json:"title_en" example:"Colourful stones"`
+	DescriptionUz *string `json:"description_uz" example:"Toshlarni rangi bo'yicha saralang"`
+	DescriptionRu *string `json:"description_ru" example:"Сортируйте камни по цвету"`
+	DescriptionEn *string `json:"description_en" example:"Sort the stones by colour"`
+	MainIdeaUz    *string `json:"main_idea_uz" example:"Bola ranglarni nomlab, ularni farqlashni o'rganadi."`
+	MainIdeaRu    *string `json:"main_idea_ru" example:"Называя цвета, ребёнок учится их различать."`
+	MainIdeaEn    *string `json:"main_idea_en" example:"Naming colours helps the child tell them apart."`
+	EasierUz      *string `json:"easier_uz" example:"Faqat ikki rangdan boshlang"`
+	EasierRu      *string `json:"easier_ru" example:"Начните только с двух цветов"`
+	EasierEn      *string `json:"easier_en" example:"Start with only two colours"`
+	HarderUz      *string `json:"harder_uz" example:"Toshlarni o'lchami bo'yicha ham saralang"`
+	HarderRu      *string `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
+	HarderEn      *string `json:"harder_en" example:"Also sort the stones by size"`
+	Difficulty    *string `json:"difficulty" example:"easy" enums:"easy,normal,difficult"`
+	// PhotoID "" removes the picture.
+	PhotoID         *string  `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          *int     `json:"min_age" example:"3" minimum:"2" maximum:"6"`
 	MaxAge          *int     `json:"max_age" example:"5" minimum:"2" maximum:"6"`
@@ -313,6 +318,7 @@ type UpdateActivityRequest struct {
 // @Description - same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)
 // @Description - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
 // @Description - send {"is_published": true} to publish, false to hide it from the app
+// @Description - photo_id "" removes the picture
 // @Tags admin
 // @Security AdminKey
 // @Accept json
@@ -359,6 +365,7 @@ func (s *Server) UpdateActivity() gin.HandlerFunc {
 			HarderRu:        req.HarderRu,
 			HarderEn:        req.HarderEn,
 			Difficulty:      req.Difficulty,
+			PhotoID:         req.PhotoID,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
 			MaxAge:          req.MaxAge,
@@ -403,23 +410,27 @@ func (s *Server) DeleteActivity() gin.HandlerFunc {
 }
 
 type activityView struct {
-	ID              string    `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
-	TitleUz         string    `json:"title_uz" example:"Rangli toshlar"`
-	TitleRu         string    `json:"title_ru" example:"Цветные камни"`
-	TitleEn         string    `json:"title_en" example:"Colourful stones"`
-	DescriptionUz   string    `json:"description_uz"`
-	DescriptionRu   string    `json:"description_ru"`
-	DescriptionEn   string    `json:"description_en"`
-	MainIdeaUz      string    `json:"main_idea_uz"`
-	MainIdeaRu      string    `json:"main_idea_ru"`
-	MainIdeaEn      string    `json:"main_idea_en"`
-	EasierUz        string    `json:"easier_uz"`
-	EasierRu        string    `json:"easier_ru"`
-	EasierEn        string    `json:"easier_en"`
-	HarderUz        string    `json:"harder_uz"`
-	HarderRu        string    `json:"harder_ru"`
-	HarderEn        string    `json:"harder_en"`
-	Difficulty      string    `json:"difficulty" example:"normal" enums:"easy,normal,difficult"`
+	ID            string `json:"id" example:"7b0c1f1e-2d7a-4d8e-9a55-0f4a0d7f9c11"`
+	TitleUz       string `json:"title_uz" example:"Rangli toshlar"`
+	TitleRu       string `json:"title_ru" example:"Цветные камни"`
+	TitleEn       string `json:"title_en" example:"Colourful stones"`
+	DescriptionUz string `json:"description_uz"`
+	DescriptionRu string `json:"description_ru"`
+	DescriptionEn string `json:"description_en"`
+	MainIdeaUz    string `json:"main_idea_uz"`
+	MainIdeaRu    string `json:"main_idea_ru"`
+	MainIdeaEn    string `json:"main_idea_en"`
+	EasierUz      string `json:"easier_uz"`
+	EasierRu      string `json:"easier_ru"`
+	EasierEn      string `json:"easier_en"`
+	HarderUz      string `json:"harder_uz"`
+	HarderRu      string `json:"harder_ru"`
+	HarderEn      string `json:"harder_en"`
+	Difficulty    string `json:"difficulty" example:"normal" enums:"easy,normal,difficult"`
+	// PhotoID is the activity's picture, a media id; null without one.
+	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	// PhotoURL is where to load the picture from (GET, no token); null without one.
+	PhotoURL        *string   `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	GoalIDs         []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int       `json:"min_age" example:"3"`
 	MaxAge          int       `json:"max_age" example:"5"`
@@ -455,6 +466,8 @@ func toActivityView(a domain.Activity) activityView {
 		HarderRu:        a.HarderRu,
 		HarderEn:        a.HarderEn,
 		Difficulty:      a.Difficulty,
+		PhotoID:         a.PhotoID,
+		PhotoURL:        photoURL(a.PhotoID),
 		GoalIDs:         a.GoalIDs,
 		MinAge:          a.MinAge,
 		MaxAge:          a.MaxAge,

@@ -100,6 +100,8 @@ func validate(a domain.Activity) error {
 		return errs.Errf(errs.ErrValidation, "duration_minutes must be between 1 and %d", maxDurationMinutes)
 	case !domain.ValidDifficulty(a.Difficulty):
 		return errDifficulty
+	case a.PhotoID != nil && *a.PhotoID != "" && uuid.Validate(*a.PhotoID) != nil:
+		return errs.Errf(errs.ErrValidation, "photo_id must be a media id (UUID) from POST /v1/media")
 	}
 
 	for _, id := range a.GoalIDs {

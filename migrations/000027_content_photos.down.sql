@@ -1,0 +1,2 @@
+ALTER TABLE posts DROP COLUMN IF EXISTS photo_id;
+ALTER TABLE activities DROP COLUMN IF EXISTS photo_id;

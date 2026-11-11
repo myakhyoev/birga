@@ -76,8 +76,9 @@ Workflows in `.github/workflows/`:
 | Workflow | When | What |
 |---|---|---|
 | `ci.yml` | every pull request and push to `main` | golangci-lint (non-blocking: v2.12.2 cannot analyse Go 1.27 yet); tests against PostgreSQL 17 after migrations |
-| `ci.yml`, job `deploy` | push to `main` after tests pass (or run by hand on `main`) | builds the binary for the server's CPU, uploads it with `migrations/` and `seeds/`, then runs `deploy/server/release.sh`: migrate up, load `seeds/activities.sql` if `activities` is empty, swap the binary, restart, check `/health`, roll back to the previous binary if the check fails |
+| `ci.yml`, job `deploy` | push to `main` after tests pass (or run by hand on `main`) | builds the binary for the server's CPU, uploads it with `migrations/` and `seeds/`, then runs `deploy/server/release.sh`: migrate up, load `seeds/activities.sql` if `activities` is empty, attach the [seed photos](#seed-photos) (`birga_backend seed-photos seeds/photos`; a failure is logged and does not stop the release), swap the binary, restart, check `/health`, roll back to the previous binary if the check fails |
 | `server-diagnostics.yml` | by hand (inputs: text to search, how far back) | runs `deploy/server/diagnostics.sh`: service states, which backend settings are set (values hidden), nginx upload limits, matching API and nginx log lines with phone numbers, IPs and device ids masked, and the activities that have Uzbek text but an empty English field (id, `title_uz`, which fields); safe for this public repository's logs |
+| `fetch-photos.yml` | push to any branch except `main` that changes `seeds/photos/sources.tsv` (or this workflow or its script) | runs `deploy/ci/fetch-photos.sh`: downloads every listed photo whose JPEG is missing, resizes it to at most 1200 px (JPEG, quality 82) and commits the files back to the branch. See [Seed photos](#seed-photos) |
 | `server-setup.yml` | by hand (Actions tab, inputs: API domain, dashboard domain, certificate e-mail) | uploads `deploy/server/` and runs `bootstrap.sh` |
 
 The deploy job skips itself (with a notice) until the secrets exist and the server has been
@@ -96,6 +97,25 @@ Repository secrets (Settings, Secrets and variables, Actions):
 `SERVER_HOST_FINGERPRINT` at the top of each workflow; update it there if the server is
 reinstalled. This repository is public, so its Actions logs are too: workflows must never
 print secrets or the env file.
+
+## Seed photos
+
+The starter content has real pictures: every starter activity (`seeds/activities.sql`), sample
+article and sample video (`000024_sample_content`) has a generated photo in `seeds/photos/`
+(Uzbek family scenes, made with Figma's image generator in the Figma file "Birga content
+photos", `LU3cVmnWzBZXRVqtjXn10i`, 2026-11-11).
+
+- `seeds/photos/sources.tsv` lists them, tab separated: kind (`activity`, `article`, `post`), key
+  (an activity's `title_uz`, an article or post id), file, and the URL it was generated at.
+- Adding a photo: generate it, add a line, push to a branch. The cloud sessions cannot reach
+  figma.com, so the `fetch-photos.yml` workflow downloads it and commits the JPEG (Figma links
+  expire after 7 days; the committed JPEG is what counts). A JPEG can also be committed by hand.
+- On deploy, `release.sh` runs `birga_backend seed-photos seeds/photos`
+  (`usecases/photo_seeder`): for each line whose content exists and has no `photo_id`, it uploads
+  the JPEG to S3 as a new `media` row and sets `photo_id`. Content with a picture (seeded before
+  or set by an admin) is skipped, so it adds nothing on later deploys. Without S3 it prints
+  `seed photos skipped` and does nothing.
+- To replace a seeded picture, upload another one in the dashboard.
 
 ## Images
 

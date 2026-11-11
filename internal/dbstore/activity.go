@@ -39,6 +39,7 @@ type dbActivity struct {
 	HarderRu        string    `db:"harder_ru"`
 	HarderEn        string    `db:"harder_en"`
 	Difficulty      string    `db:"difficulty"`
+	PhotoID         *string   `db:"photo_id"`
 	GoalIDs         []string  `db:"goal_ids"`
 	MinAge          int16     `db:"min_age"`
 	MaxAge          int16     `db:"max_age"`
@@ -50,7 +51,7 @@ type dbActivity struct {
 
 const activityColumns = `
 	id, title_uz, title_ru, title_en, description_uz, description_ru, description_en, main_idea_uz, main_idea_ru, main_idea_en,
-	easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en, difficulty,
+	easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en, difficulty, photo_id,
 	goal_ids, min_age, max_age, duration_minutes, is_published, created_at, updated_at`
 
 func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Activity, error) {
@@ -62,8 +63,8 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		INSERT INTO activities (
 			title_uz, title_ru, title_en, description_uz, description_ru, description_en,
 			main_idea_uz, main_idea_ru, main_idea_en, easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en,
-			goal_ids, min_age, max_age, duration_minutes, is_published, difficulty
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, COALESCE(NULLIF($21, ''), 'normal'))
+			goal_ids, min_age, max_age, duration_minutes, is_published, difficulty, photo_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, COALESCE(NULLIF($21, ''), 'normal'), $22)
 		RETURNING ` + activityColumns
 	)
 
@@ -71,7 +72,7 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 		a.TitleUz, a.TitleRu, a.TitleEn, a.DescriptionUz, a.DescriptionRu, a.DescriptionEn,
 		a.MainIdeaUz, a.MainIdeaRu, a.MainIdeaEn,
 		a.EasierUz, a.EasierRu, a.EasierEn, a.HarderUz, a.HarderRu, a.HarderEn, a.GoalIDs,
-		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished, a.Difficulty,
+		a.MinAge, a.MaxAge, a.DurationMinutes, a.IsPublished, a.Difficulty, photoOrNull(a.PhotoID),
 	)
 	if err != nil {
 		l.Error("sqlClient.Query", zap.Error(err))
@@ -80,6 +81,10 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 	}
 
 	created, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[dbActivity])
+	if isPhotoFKError(err, "activities_photo_id_fkey") {
+		return domain.Activity{}, errs.ErrPhotoNotFound
+	}
+
 	if err != nil {
 		l.Error("pgx.CollectExactlyOneRow", zap.Error(err))
 
@@ -144,6 +149,10 @@ func (r *activityRepo) one(ctx context.Context, l *zap.Logger, q string, args ..
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Activity{}, errs.ErrActivityNotFound
+	}
+
+	if isPhotoFKError(err, "activities_photo_id_fkey") {
+		return domain.Activity{}, errs.ErrPhotoNotFound
 	}
 
 	var pgErr *pgconn.PgError
@@ -313,6 +322,10 @@ func activitySet(upd domain.ActivityUpdate) (string, []any) {
 		}
 	}
 
+	if upd.PhotoID != nil {
+		add("photo_id", nullIfEmpty(*upd.PhotoID))
+	}
+
 	if upd.GoalIDs != nil {
 		add("goal_ids", upd.GoalIDs)
 	}
@@ -355,6 +368,7 @@ func (a dbActivity) toDomain() domain.Activity {
 		HarderRu:        a.HarderRu,
 		HarderEn:        a.HarderEn,
 		Difficulty:      a.Difficulty,
+		PhotoID:         a.PhotoID,
 		GoalIDs:         nonNil(a.GoalIDs),
 		MinAge:          int(a.MinAge),
 		MaxAge:          int(a.MaxAge),
@@ -458,4 +472,21 @@ func (r *activityRepo) ListByIDs(ctx context.Context, ids []string, publishedOnl
 	}
 
 	return out, nil
+}
+
+// photoOrNull turns a missing or empty photo id into NULL.
+func photoOrNull(id *string) *string {
+	if id == nil {
+		return nil
+	}
+
+	return nullIfEmpty(*id)
+}
+
+// isPhotoFKError reports whether err is a foreign key violation of the given photo constraint,
+// that is, a photo_id that is not an uploaded media id.
+func isPhotoFKError(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+
+	return errors.As(err, &pgErr) && pgErr.Code == pgForeignKeyViolation && pgErr.ConstraintName == constraint
 }
