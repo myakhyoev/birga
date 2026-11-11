@@ -5,7 +5,7 @@ name: Fetch seed photos
 on:
   push:
     branches-ignore: [main]
-    paths: [seeds/photos/sources.tsv]
+    paths: [seeds/photos/sources.tsv, deploy/ci/fetch-photos.sh, .github/workflows/fetch-photos.yml]
   workflow_dispatch:
 
 permissions:
@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install ImageMagick
-        run: command -v convert || (sudo apt-get update -q && sudo apt-get install -yq imagemagick)
+      - name: Install Pillow
+        run: pip install --quiet pillow
       - name: Fetch
         run: deploy/ci/fetch-photos.sh
       - name: Commit

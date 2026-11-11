@@ -16,7 +16,13 @@ while IFS=$'\t' read -r kind key file url; do
 		rm -f "$tmp"
 		exit 1
 	fi
-	convert "$tmp" -resize '1200x1200>' -strip -interlace JPEG -quality 82 "jpg:$dest"
+	python3 - "$tmp" "$dest" <<'PY'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+im.thumbnail((1200, 1200))
+im.save(sys.argv[2], "JPEG", quality=82, optimize=True, progressive=True)
+PY
 	rm -f "$tmp"
 	echo "fetched $dest ($(du -k "$dest" | cut -f1) KB)"
 	fetched=$((fetched + 1))
