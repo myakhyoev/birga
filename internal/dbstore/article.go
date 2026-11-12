@@ -439,7 +439,7 @@ func articleSet(upd domain.ArticleUpdate) (string, []any) {
 		{"title_uz", upd.TitleUz}, {"title_ru", upd.TitleRu}, {"title_en", upd.TitleEn},
 		{"article_body_uz", upd.BodyUz}, {"article_body_ru", upd.BodyRu}, {"article_body_en", upd.BodyEn},
 		{"tip_uz", upd.TipUz}, {"tip_ru", upd.TipRu}, {"tip_en", upd.TipEn},
-		{"goal_id", upd.GoalID}, {"status", upd.Status}, {"source", upd.Source},
+		{colGoalID, upd.GoalID}, {colStatus, upd.Status}, {colSource, upd.Source},
 	} {
 		if f.value != nil {
 			add(f.column, *f.value)

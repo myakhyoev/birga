@@ -1405,9 +1405,10 @@ takes no photo).
 |---|---|---|
 | POST | `/v1/media` | upload one image |
 | POST | `/v1/admin/media` | admin only: upload an image or an MP4/WebM video (for [daily videos](#daily-videos-posts-admin)) |
-| GET | `/v1/media/{id}` | open an image: 302 redirect to a signed S3 link |
+| GET | `/v1/media/{id}` | open an image: 302 redirect to a signed S3 link; `?size=` picks a size |
+| POST | `/v1/admin/media/{id}/recrop` | admin only: copy a photo with another frame (new id) |
 
-The body is form data with one field, `file`, in any of these forms:
+The body is form data with the field `file`, in any of these forms:
 
 - `multipart/form-data` with `file` as a file part (a normal file upload);
 - `multipart/form-data` or `application/x-www-form-urlencoded` with `file` as a base64
@@ -1424,6 +1425,14 @@ Rules (`usecases/media_uploader`):
 - at most `MEDIA_MAX_SIZE` bytes after decoding (default 100 MiB), otherwise 422; an empty file
   is 422 too;
 - a missing `file` field or invalid base64 is 400;
+- optional field `kind`: `profile` or `content`, which decides the [sizes](#photo-sizes) the server
+  makes. `POST /v1/media` defaults to `profile` (user and child photos), `POST /v1/admin/media` to
+  `content` (activity and article pictures, video covers); the dashboard sends `kind=profile` for a
+  user's photo. Another value is 422. Videos get no sizes; `kind` and `crop` are ignored for them;
+- optional field `crop`: `x,y,w,h`, the frame the uploader chose, in fractions (0 to 1) of the
+  upright photo's width and height (e.g. `0,0.1,1,0.75`). It must lie inside the photo (422
+  otherwise). Without it the centre of the photo is used. The frame should already have the kind's
+  shape (1:1 for profile, 2:1 for content); if not, the centre part of it with that shape is used;
 - when S3 is not configured (`S3_BUCKET` empty) the endpoint answers 503 `media uploads are
   disabled`; a failed S3 call is 500.
 
@@ -1435,6 +1444,8 @@ The object is stored as `<S3_KEY_PREFIX>media/<id>.<ext>`. Response `data`:
 | `url` | string | `/v1/media/{id}`: the path on this API to load the image from |
 | `content_type` | string | `image/jpeg`, `image/png` or `image/webp` |
 | `size` | integer | bytes |
+| `kind` | string | `profile` or `content`; empty for a video |
+| `variants_status` | string | `pending` right after the upload (sizes are being made), `done`, `failed`, or `none` (videos) |
 
 The endpoint has no user authentication yet (there are no user tokens); it should move
 behind user auth once sign-in exists.
@@ -1458,10 +1469,38 @@ curl -X POST localhost:8080/v1/media --data-urlencode "file=$(base64 -i photo.jp
     "id": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
     "url": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f",
     "content_type": "image/jpeg",
-    "size": 183244
+    "size": 183244,
+    "kind": "profile",
+    "variants_status": "pending"
   }
 }
 ```
+
+#### Photo sizes
+
+The original is always kept. A few seconds after an image upload, a worker inside the API (see
+[architecture.md](architecture.md#photo-variants)) cuts the chosen frame and stores these sizes as
+JPEGs next to the original:
+
+| Kind | Used for | `main` | `thumb` | `small` |
+|---|---|---|---|---|
+| `profile` | user and child photos | 800x800 | 250x250 | (gives `thumb`) |
+| `content` | activity and article pictures, video covers (banners) | 1200x600 | 400x200 | 240x240, the centre square of the frame |
+
+`main` is never blown up: a photo smaller than the size gives a smaller picture of the same shape.
+`thumb` and `small` are always the exact size. Which size to use:
+
+- `main`: the big picture of a screen (activity page, Home "today" card, video banner, profile page);
+- `thumb`: cards a third to half the screen wide ("Siz uchun" tiles, library cards, dashboard previews);
+- `small`: list rows and icons up to about 80 points (plan rows, history, article and video lists,
+  dashboard table thumbnails, avatars).
+
+Show `main` and `thumb` in a box of the kind's shape (2:1 for content, square for profile) so
+nothing of the chosen frame is cut. Videos themselves have no sizes: the uploaded file is played.
+
+Every view that has a `photo_id` (activities, articles, video posts, users, children) also carries
+`photo_main_url`, `photo_thumb_url` and `photo_small_url` next to `photo_url` (the original);
+they are `/v1/media/{id}?size=main|thumb|small`, or `null` without a photo.
 
 #### Showing an image
 
@@ -1472,7 +1511,23 @@ already hold this path; put the API's base URL in front, e.g.
 `Image.network` work as they are. It answers 302 with `Location` set to a signed S3 link that
 works for `MEDIA_LINK_TTL` (default 1 hour), and `Cache-Control: private, max-age=300`; image
 clients follow the redirect on their own. An id that is not an uploaded media id is 404
-`media not found`; S3 not configured is 503. Media ids are random UUIDs, so only someone who was
+`media not found`; S3 not configured is 503.
+
+`?size=original|main|thumb|small` (default `original`) picks a [size](#photo-sizes); another value
+is 400. While the sizes are not made yet (the first seconds after an upload), or if making them
+failed, the redirect opens the original. The response header `X-Media-Variant` says which one it
+opens: the size asked for, `thumb` for `small` of a profile photo, or `original`. An app that keeps
+photos on disk by id and size should only keep the bytes when this header matches, and load again
+later otherwise.
+
+#### Changing a photo's frame
+
+`POST /v1/admin/media/{id}/recrop` with `{"kind": "content", "crop": {"x": 0, "y": 0.1, "w": 1, "h": 0.5}}`
+(`crop` null means the centre) takes the original of photo `{id}` and stores it again as a **new**
+media row with that kind and frame; its sizes are made like after an upload. The answer is the
+same as an upload's. Media ids never change their picture (apps keep photos by id), so put the new
+id into the content's `photo_id` (or the user's) to show the new frame. A video is 422, an unknown
+id 404. Media ids are random UUIDs, so only someone who was
 given an id can open the photo.
 
 

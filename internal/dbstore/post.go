@@ -64,7 +64,8 @@ func (r *postRepo) Create(ctx context.Context, p domain.Post) (domain.Post, erro
 
 	return r.one(ctx, l, q,
 		p.TitleUz, p.TitleRu, p.TitleEn, p.VideoID, p.GoalID, p.MinAge, p.MaxAge, p.Duration,
-		p.SuggestionUz, p.SuggestionRu, p.SuggestionEn, p.QuestionsUz, p.QuestionsRu, p.QuestionsEn, p.Status, topicOrNull(p.TopicID), photoOrNull(p.PhotoID), p.Source,
+		p.SuggestionUz, p.SuggestionRu, p.SuggestionEn, p.QuestionsUz, p.QuestionsRu, p.QuestionsEn,
+		p.Status, topicOrNull(p.TopicID), photoOrNull(p.PhotoID), p.Source,
 	)
 }
 
@@ -345,10 +346,10 @@ func postSet(upd domain.PostUpdate) (string, []any) {
 		value  *string
 	}{
 		{"title_uz", upd.TitleUz}, {"title_ru", upd.TitleRu}, {"title_en", upd.TitleEn},
-		{"video_id", upd.VideoID}, {"goal_id", upd.GoalID},
+		{"video_id", upd.VideoID}, {colGoalID, upd.GoalID},
 		{"suggestion_uz", upd.SuggestionUz}, {"suggestion_ru", upd.SuggestionRu}, {"suggestion_en", upd.SuggestionEn},
 		{"questions_uz", upd.QuestionsUz}, {"questions_ru", upd.QuestionsRu}, {"questions_en", upd.QuestionsEn},
-		{"status", upd.Status}, {"source", upd.Source},
+		{colStatus, upd.Status}, {colSource, upd.Source},
 	} {
 		if f.value != nil {
 			add(f.column, *f.value)

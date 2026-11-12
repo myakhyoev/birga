@@ -4,6 +4,7 @@ package s3storage
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -93,6 +94,24 @@ func (c *Client) Put(ctx context.Context, key, contentType string, data []byte) 
 	}
 
 	return nil
+}
+
+// Get downloads the object under key.
+func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
+	out, err := c.api.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(key)})
+	if err != nil {
+		c.l.Error("s3.GetObject", zap.Error(err), zap.String("key", key))
+
+		return nil, errs.Errf(errs.ErrConnection, "download from storage failed: %s", err.Error())
+	}
+	defer out.Body.Close()
+
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, errs.Errf(errs.ErrConnection, "download from storage failed: %s", err.Error())
+	}
+
+	return data, nil
 }
 
 // Delete removes the object under key; a missing object is not an error.

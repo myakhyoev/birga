@@ -65,7 +65,8 @@ func (r *activityRepo) Create(ctx context.Context, a domain.Activity) (domain.Ac
 			title_uz, title_ru, title_en, description_uz, description_ru, description_en,
 			main_idea_uz, main_idea_ru, main_idea_en, easier_uz, easier_ru, easier_en, harder_uz, harder_ru, harder_en,
 			goal_ids, min_age, max_age, duration_minutes, is_published, difficulty, photo_id, source
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, COALESCE(NULLIF($21, ''), 'normal'), $22,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+			COALESCE(NULLIF($21, ''), 'normal'), $22,
 			COALESCE(NULLIF($23, ''), 'admin'))
 		RETURNING ` + activityColumns
 	)
@@ -322,7 +323,7 @@ func activitySet(upd domain.ActivityUpdate) (string, []any) {
 	}{
 		{"easier_uz", upd.EasierUz}, {"easier_ru", upd.EasierRu}, {"easier_en", upd.EasierEn},
 		{"harder_uz", upd.HarderUz}, {"harder_ru", upd.HarderRu}, {"harder_en", upd.HarderEn},
-		{"difficulty", upd.Difficulty}, {"source", upd.Source},
+		{"difficulty", upd.Difficulty}, {colSource, upd.Source},
 	} {
 		if f.value != nil {
 			add(f.column, *f.value)
@@ -428,7 +429,8 @@ func (r *activityRepo) Similar(ctx context.Context, f domain.SimilarFilter) ([]d
 		childID = &f.ChildID
 	}
 
-	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q, childID, f.ActivityID, nonNil(f.GoalIDs), minAge, maxAge, f.Limit, nonNil(f.ExcludeIDs))
+	rows, err := r.store.sqlClientByCtx(ctx).Query(ctx, q,
+		childID, f.ActivityID, nonNil(f.GoalIDs), minAge, maxAge, f.Limit, nonNil(f.ExcludeIDs))
 	if err != nil {
 		l.Error("sqlClient.Query", zap.Error(err))
 

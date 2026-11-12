@@ -132,6 +132,7 @@ func (s *Server) endpoints() {
 		admin.DELETE("/topics/:id", s.DeleteTopic())
 
 		admin.POST("/media", s.AdminUploadMedia())
+		admin.POST("/media/:id/recrop", s.AdminRecropMedia())
 
 		admin.POST("/goals", s.CreateGoal())
 		admin.PATCH("/goals/:id", s.UpdateGoal())

@@ -77,7 +77,7 @@ func (d dailyPicks) pick(ctx context.Context, userID string, exclude []string) (
 		exclude = []string{}
 	}
 
-	group, goalOrder := `goal_id`, `(c.goal_id IN (SELECT goal_id FROM kid_goals)) DESC,`
+	group, goalOrder := colGoalID, `(c.goal_id IN (SELECT goal_id FROM kid_goals)) DESC,`
 	if d.topicColumn != "" {
 		group, goalOrder = d.topicColumn, ``
 	}

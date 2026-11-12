@@ -18,9 +18,9 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    # golangci-lint v2.12.2 (the version .gitlab-ci.yml pins) panics on the Go 1.27 standard
-    # library, so lint reports but does not fail the run until a newer release supports 1.27.
-    continue-on-error: true
+    # Build the linter with the Go from go.mod (setup-go), not the older Go golangci-lint asks for.
+    env:
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -28,8 +28,9 @@ jobs:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.12.2
-          # The released binary is built with an older Go than go.mod targets; build it here.
+          # v2.15.0 runs on Go 1.27 (v2.12.2 panicked on its standard library). The released
+          # binary is built with an older Go than go.mod targets; build it here with Go 1.27.
+          version: v2.15.0
           install-mode: goinstall
           args: -c .golangci.yml
 

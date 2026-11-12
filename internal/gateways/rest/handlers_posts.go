@@ -467,7 +467,9 @@ type postView struct {
 	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	// PhotoURL is where to load the cover from (GET, no token); null without one.
 	PhotoURL *string `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
-	GoalID   string  `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
+	// photo_main_url, photo_thumb_url, photo_small_url: the sizes of the photo (GET /v1/media/{id}?size=).
+	photoURLs
+	GoalID string `json:"goal_id" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	// TopicID is the optional topic tag from GET /v1/topics; null means none.
 	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	MinAge  int     `json:"min_age" example:"3"`
@@ -546,6 +548,7 @@ func toPostView(p domain.Post) postView {
 		VideoURL:     mediaPath(p.VideoID),
 		PhotoID:      p.PhotoID,
 		PhotoURL:     photoURL(p.PhotoID),
+		photoURLs:    newPhotoURLs(p.PhotoID),
 		GoalID:       p.GoalID,
 		TopicID:      p.TopicID,
 		MinAge:       p.MinAge,

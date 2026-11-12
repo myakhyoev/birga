@@ -167,7 +167,9 @@ func (uc *UseCase) create(ctx context.Context, child domain.Child, n int) (domai
 }
 
 // repair gives a day that is not done yet a new activity when its own was unpublished or deleted.
-func (uc *UseCase) repair(ctx context.Context, child domain.Child, plan domain.Plan, items []domain.PlanItem, usable []bool) ([]domain.PlanItem, error) {
+func (uc *UseCase) repair(
+	ctx context.Context, child domain.Child, plan domain.Plan, items []domain.PlanItem, usable []bool,
+) ([]domain.PlanItem, error) {
 	pick := newPick(child, plan.Number)
 	for _, it := range items {
 		pick.ExcludeIDs = append(pick.ExcludeIDs, it.Activity.ID)

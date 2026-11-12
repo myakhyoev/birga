@@ -514,6 +514,8 @@ type articleView struct {
 	PhotoID       *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	// PhotoURL is where the app loads the photo from (GET, no token); null without a photo.
 	PhotoURL *string `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	// photo_main_url, photo_thumb_url, photo_small_url: the sizes of the photo (GET /v1/media/{id}?size=).
+	photoURLs
 	// ExpectedReadTime is in minutes.
 	ExpectedReadTime int    `json:"expected_read_time" example:"3"`
 	MinAge           int    `json:"min_age" example:"2"`
@@ -593,6 +595,7 @@ func toArticleView(a domain.Article) articleView {
 		TipEn:            a.TipEn,
 		PhotoID:          a.PhotoID,
 		PhotoURL:         photoURL(a.PhotoID),
+		photoURLs:        newPhotoURLs(a.PhotoID),
 		ExpectedReadTime: a.ReadMinutes,
 		MinAge:           a.MinAge,
 		MaxAge:           a.MaxAge,

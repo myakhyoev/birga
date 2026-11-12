@@ -302,7 +302,8 @@ func (s *Server) GetChildMilestones() gin.HandlerFunc {
 
 // MarkMilestone godoc swagger
 // @Summary marks a milestone achieved for the child ("O‘zlashtirdi")
-// @Description Any parent of the child may mark, on any plan. Marking again keeps the first time. 404 for an unknown or unpublished milestone.
+// @Description Any parent of the child may mark, on any plan. Marking again keeps the first time.
+// @Description 404 for an unknown or unpublished milestone.
 // @Tags children
 // @Security BearerAuth
 // @Produce json
@@ -377,7 +378,10 @@ func (s *Server) GetMilestone() gin.HandlerFunc {
 			return
 		}
 
-		v := milestoneDetailView{childMilestoneView: toChildMilestoneView(d.ChildMilestone), Activities: make([]activityView, 0, len(d.Activities))}
+		v := milestoneDetailView{
+			childMilestoneView: toChildMilestoneView(d.ChildMilestone),
+			Activities:         make([]activityView, 0, len(d.Activities)),
+		}
 		for i := range d.Activities {
 			v.Activities = append(v.Activities, toActivityView(d.Activities[i]))
 		}
@@ -491,7 +495,8 @@ func toMilestoneView(m domain.Milestone) milestoneView {
 		MeaningUz: m.MeaningUz, MeaningRu: m.MeaningRu, MeaningEn: m.MeaningEn,
 		HowToUz: m.HowToUz, HowToRu: m.HowToRu, HowToEn: m.HowToEn,
 		SpecialistUz: m.SpecialistUz, SpecialistRu: m.SpecialistRu, SpecialistEn: m.SpecialistEn,
-		ActivityIDs: m.ActivityIDs, HasAdvice: m.HasAdvice(), AdviceLocked: m.AdviceLocked, Status: m.Status, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+		ActivityIDs: m.ActivityIDs, HasAdvice: m.HasAdvice(), AdviceLocked: m.AdviceLocked, Status: m.Status,
+		CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
 	}
 }
 

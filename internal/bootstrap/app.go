@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -22,6 +23,8 @@ type App struct {
 	l    *zap.Logger
 	cfg  config.Application
 	rest *rest.Server
+	// background jobs started by Run and stopped with its context
+	jobs []func(ctx context.Context)
 
 	// teardown funcs run in reverse order of registration on shutdown
 	teardown []func()
@@ -59,10 +62,16 @@ func New(cfg config.Application) *App {
 	httpSrv, shutdown := initREST(l, cfg, healthCheck{store, cache}, ucs)
 	teardown = append(teardown, shutdown)
 
+	var jobs []func(ctx context.Context)
+	if ucs.mediaVariants != nil {
+		jobs = append(jobs, func(ctx context.Context) { ucs.mediaVariants.Run(ctx, cfg.Media.VariantsInterval) })
+	}
+
 	return &App{
 		l:        l,
 		cfg:      cfg,
 		rest:     httpSrv,
+		jobs:     jobs,
 		teardown: teardown,
 	}
 }
@@ -78,6 +87,15 @@ func (app *App) Run(ctx context.Context) {
 		}
 	}()
 
+	// Background jobs (photo variant worker) stop before the database pool closes.
+	jobsCtx, stopJobs := context.WithCancel(ctx)
+	defer stopJobs()
+
+	var jobsDone sync.WaitGroup
+	for _, job := range app.jobs {
+		jobsDone.Go(func() { job(jobsCtx) })
+	}
+
 	go func() {
 		app.l.Info("HTTP server listening", zap.String("addr", app.cfg.HTTPPort))
 
@@ -92,6 +110,9 @@ func (app *App) Run(ctx context.Context) {
 	case err := <-errCh:
 		app.l.Error("HTTP server failed", zap.Error(err))
 	}
+
+	stopJobs()
+	jobsDone.Wait()
 
 	for i := len(app.teardown) - 1; i >= 0; i-- {
 		app.teardown[i]()

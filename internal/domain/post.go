@@ -68,7 +68,8 @@ type PostUpdate struct {
 
 // IsEmpty reports whether the update changes nothing.
 func (u PostUpdate) IsEmpty() bool {
-	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.VideoID == nil && u.PhotoID == nil && u.GoalID == nil && u.TopicID == nil &&
+	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.VideoID == nil && u.PhotoID == nil &&
+		u.GoalID == nil && u.TopicID == nil &&
 		u.MinAge == nil && u.MaxAge == nil && u.Duration == nil && u.SuggestionUz == nil &&
 		u.SuggestionRu == nil && u.SuggestionEn == nil && u.QuestionsUz == nil && u.QuestionsRu == nil &&
 		u.QuestionsEn == nil && u.Status == nil && u.Source == nil

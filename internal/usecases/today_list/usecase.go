@@ -151,8 +151,8 @@ func planActivityIDs(plan domain.Plan) []string {
 // (errs.ErrNeedsPro). With GoalID it picks a published activity for the child's age serving that
 // goal, not in the child's plan and not yet in today's list (errs.ErrNoExtra when none is left);
 // with ActivityID it adds that published activity, unless it is a plan day not done yet
-// (errs.ErrActivityInPlan: done early it would have to be done again on its day). Adding an activity already in the list returns it unchanged; a day
-// holds at most domain.MaxDayExtras added activities (errs.ErrTooManyExtras).
+// (errs.ErrActivityInPlan: done early it would have to be done again on its day). Adding an
+// activity already in the list returns it unchanged; a day holds at most domain.MaxDayExtras added activities (errs.ErrTooManyExtras).
 func (uc *UseCase) AddExtra(ctx context.Context, req ExtraRequest) (domain.DayExtra, error) {
 	if !req.Pro {
 		return domain.DayExtra{}, errs.ErrNeedsPro
@@ -223,7 +223,9 @@ func (uc *UseCase) AddExtra(ctx context.Context, req ExtraRequest) (domain.DayEx
 	return domain.DayExtra{Activity: a, AddedAt: uc.now()}, nil
 }
 
-func (uc *UseCase) pick(ctx context.Context, child domain.Child, cur domain.Today, plan domain.Plan, goalID string) (domain.Activity, error) {
+func (uc *UseCase) pick(
+	ctx context.Context, child domain.Child, cur domain.Today, plan domain.Plan, goalID string,
+) (domain.Activity, error) {
 	n, err := uc.goals.CountActive(ctx, []string{goalID})
 	if err != nil {
 		return domain.Activity{}, err

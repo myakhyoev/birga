@@ -10,7 +10,7 @@ small admin API for managing activities and users (create, read, update, publish
 delete), sends and verifies one-time SMS codes (Play Mobile, codes kept in Redis) for account
 changes (sign-up skips OTP for now and gives the role `unverified_user`; it asks the user's
 relationship to the children), serves the list of goals (admins manage it),
-and uploads profile photos to AWS S3. A signed-in parent adds children with their own goals;
+and uploads photos to AWS S3, keeping the original and making the sizes each screen needs (a worker inside the API). A signed-in parent adds children with their own goals;
 each child gets a 7-day plan rotating through its goals, records completions with an optional
 reflection, and has its own streak and calendar of done and missed plan days. Each parent also
 gets a daily article picked from the goals and ages of their children (admins write and publish

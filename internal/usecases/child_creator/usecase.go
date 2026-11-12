@@ -111,7 +111,8 @@ func validate(c domain.Child) error {
 	case !domain.IsValidChildName(c.Name):
 		return errs.Errf(errs.ErrValidation, "name is required, at most %d characters", domain.MaxChildNameLength)
 	case !domain.IsValidChildAgeMonths(c.AgeMonths):
-		return errs.Errf(errs.ErrValidation, "age_months must be 1 to 11, a half year from 12 to 84, or a whole year up to %d", domain.MaxChildAgeMonths)
+		return errs.Errf(errs.ErrValidation,
+			"age_months must be 1 to 11, a half year from 12 to 84, or a whole year up to %d", domain.MaxChildAgeMonths)
 	case !domain.IsKnownGender(c.Gender):
 		return errs.Errf(errs.ErrValidation, "gender must be %s or %s", domain.GenderMale, domain.GenderFemale)
 	case c.PhotoID != nil && uuid.Validate(*c.PhotoID) != nil:

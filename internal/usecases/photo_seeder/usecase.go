@@ -49,7 +49,8 @@ type Result struct {
 
 // Execute reads dir/sources.tsv and attaches every listed photo whose content still has none.
 func (uc *UseCase) Execute(ctx context.Context, dir string) (Result, error) {
-	f, err := os.Open(filepath.Join(dir, SourcesFile))
+	// dir is the deploy's seed folder from the command line, not user input.
+	f, err := os.Open(filepath.Join(dir, SourcesFile)) //nolint:gosec // G304: path from the deploy command
 	if err != nil {
 		return Result{}, errs.Errf(errs.ErrInternal, "open the seed photo list: %s", err.Error())
 	}
@@ -73,7 +74,8 @@ func (uc *UseCase) Execute(ctx context.Context, dir string) (Result, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(dir, filepath.Clean("/"+p.File)))
+		// The file name is cleaned under dir, so a listed name cannot leave the seed folder.
+		data, err := os.ReadFile(filepath.Join(dir, filepath.Clean("/"+p.File))) //nolint:gosec // G304: kept inside dir
 		if os.IsNotExist(err) {
 			l.Warn("seed photo file missing", zap.String("file", p.File))
 
@@ -86,7 +88,7 @@ func (uc *UseCase) Execute(ctx context.Context, dir string) (Result, error) {
 			return res, errs.Errf(errs.ErrInternal, "read %s: %s", p.File, err.Error())
 		}
 
-		m, err := uc.uploader.Execute(ctx, domain.MediaUpload{Data: data})
+		m, err := uc.uploader.Execute(ctx, domain.MediaUpload{Data: data, Kind: domain.MediaKindContent})
 		if err != nil {
 			return res, err
 		}
@@ -122,7 +124,7 @@ func ParseSources(r io.Reader) ([]domain.SeedPhoto, error) {
 		}
 
 		cols := strings.Split(text, "\t")
-		if len(cols) < 3 || cols[0] == "" || cols[1] == "" || cols[2] == "" { //nolint:mnd
+		if len(cols) < 3 || cols[0] == "" || cols[1] == "" || cols[2] == "" {
 			return nil, errs.Errf(errs.ErrValidation, "%s line %d: want kind, key and file separated by tabs", SourcesFile, line)
 		}
 

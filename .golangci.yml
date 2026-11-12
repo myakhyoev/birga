@@ -37,7 +37,9 @@ linters:
       lines: 130
       statements: 50
     gocyclo:
-      min-complexity: 15
+      # Request validation and "is this update empty" checks are long flat chains of field
+      # checks; 25 still catches tangled logic.
+      min-complexity: 25
     lll:
       line-length: 140
     nolintlint:
@@ -51,7 +53,17 @@ linters:
       - std-error-handling
     rules:
       - path: _test\.go
-        linters: [mnd, funlen, dupl, lll, goconst, noctx, gosec]
+        linters: [mnd, funlen, dupl, lll, goconst, noctx, gosec, gocyclo, unparam]
+      # One repository per table: the CRUD of similar tables (goals/topics, articles/posts/tips)
+      # looks alike on purpose.
+      - path: internal/dbstore/
+        linters: [dupl]
+      # The route table lists every endpoint in one place.
+      - path: internal/gateways/rest/routes\.go
+        linters: [funlen]
+      # EXIF/TIFF parsing: byte offsets, markers and orientation values are the format's numbers.
+      - path: pkg/imagevariant/exif\.go
+        linters: [mnd]
 
 formatters:
   exclusions:
