@@ -18,6 +18,8 @@ type Post struct {
 	TitleRu string
 	TitleEn string
 	VideoID string // an uploaded media id holding an MP4 or WebM video
+	// PhotoID is the optional cover picture, an uploaded image; nil means none.
+	PhotoID *string
 	GoalID  string
 	// TopicID is the optional topic tag; nil means none.
 	TopicID      *string
@@ -44,6 +46,8 @@ type PostUpdate struct {
 	TitleRu *string
 	TitleEn *string
 	VideoID *string
+	// PhotoID pointing to "" removes the cover picture.
+	PhotoID *string
 	GoalID  *string
 	// TopicID pointing to "" removes the topic.
 	TopicID      *string
@@ -61,7 +65,7 @@ type PostUpdate struct {
 
 // IsEmpty reports whether the update changes nothing.
 func (u PostUpdate) IsEmpty() bool {
-	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.VideoID == nil && u.GoalID == nil && u.TopicID == nil &&
+	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.VideoID == nil && u.PhotoID == nil && u.GoalID == nil && u.TopicID == nil &&
 		u.MinAge == nil && u.MaxAge == nil && u.Duration == nil && u.SuggestionUz == nil &&
 		u.SuggestionRu == nil && u.SuggestionEn == nil && u.QuestionsUz == nil && u.QuestionsRu == nil &&
 		u.QuestionsEn == nil && u.Status == nil

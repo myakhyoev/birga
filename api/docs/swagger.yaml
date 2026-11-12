@@ -143,6 +143,9 @@ definitions:
         maximum: 6
         minimum: 2
         type: integer
+      photo_id:
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
       title_en:
         example: Colourful stones
         type: string
@@ -281,6 +284,11 @@ definitions:
         maximum: 6
         minimum: 2
         type: integer
+      photo_id:
+        description: PhotoID is the optional cover picture, an image from POST /v1/admin/media;
+          null means none.
+        example: 5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
       questions_en:
         example: |-
           "Which colour did you like most?"
@@ -730,6 +738,10 @@ definitions:
         maximum: 6
         minimum: 2
         type: integer
+      photo_id:
+        description: PhotoID "" removes the picture.
+        example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
       title_en:
         example: Colourful stones
         type: string
@@ -859,6 +871,10 @@ definitions:
         maximum: 6
         minimum: 2
         type: integer
+      photo_id:
+        description: PhotoID "" removes the cover picture.
+        example: 5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
       questions_en:
         type: string
       questions_ru:
@@ -1065,6 +1081,15 @@ definitions:
       min_age:
         example: 3
         type: integer
+      photo_id:
+        description: PhotoID is the activity's picture, a media id; null without one.
+        example: 5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
+      photo_url:
+        description: PhotoURL is where to load the picture from (GET, no token); null
+          without one.
+        example: /v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
       title_en:
         example: Colourful stones
         type: string
@@ -1837,6 +1862,15 @@ definitions:
       min_age:
         example: 3
         type: integer
+      photo_id:
+        description: PhotoID is the cover picture, a media id; null without one.
+        example: 5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
+      photo_url:
+        description: PhotoURL is where to load the cover from (GET, no token); null
+          without one.
+        example: /v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
       questions_en:
         type: string
       questions_ru:
@@ -2646,6 +2680,7 @@ paths:
         - min_age/max_age are child ages in years, within 2..6
         - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
         - difficulty is easy, normal or difficult (default normal); plans pick normal ones first
+        - photo_id is an optional picture, an id from POST /v1/media or /v1/admin/media (422 if unknown)
       parameters:
       - description: activity
         in: body
@@ -2773,6 +2808,7 @@ paths:
         - same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)
         - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
         - send {"is_published": true} to publish, false to hide it from the app
+        - photo_id "" removes the picture
       parameters:
       - description: activity id (UUID)
         in: path
@@ -3625,6 +3661,7 @@ paths:
         - title is required in Uzbek, Russian and English; suggestion_* ("Tavsiya" line) and
         questions_* ("ask after watching" box, one question per line) are optional, "" hides them
         - video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)
+        - photo_id is an optional cover picture, an image uploaded with POST /v1/admin/media (422 if unknown)
         - goal_id is one active goal from GET /v1/goals (422 if unknown)
         - topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)
         - duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600
@@ -3753,7 +3790,7 @@ paths:
       - application/json
       description: |-
         - only the fields present in the body change; omitted or null fields are kept
-        - same rules as create; titles cannot be emptied; suggestion_*/questions_* "" removes them
+        - same rules as create; titles cannot be emptied; suggestion_*/questions_* "" removes them; photo_id "" removes the cover
         - the resulting age range must stay valid (422)
         - send {"status": "published"} to show it in the app, "in_review" or "unpublished" to hide it
       parameters:

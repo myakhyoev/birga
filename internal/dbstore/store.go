@@ -112,6 +112,10 @@ func (s *DBStore) Extra() *extraRepo {
 	return s.extraRepo
 }
 
+func (s *DBStore) SeedPhoto() *seedPhotoRepo {
+	return &seedPhotoRepo{store: s}
+}
+
 func (s *DBStore) Milestone() *milestoneRepo {
 	return s.milestoneRepo
 }

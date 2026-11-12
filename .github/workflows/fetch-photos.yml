@@ -1,0 +1,30 @@
+# Downloads the seed photos listed in seeds/photos/sources.tsv and commits the JPEGs to the branch
+# that changed the list. See docs/operations.md, "Seed photos".
+name: Fetch seed photos
+
+on:
+  push:
+    branches-ignore: [main]
+    paths: [seeds/photos/sources.tsv, deploy/ci/fetch-photos.sh, .github/workflows/fetch-photos.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Pillow
+        run: pip install --quiet pillow
+      - name: Fetch
+        run: deploy/ci/fetch-photos.sh
+      - name: Commit
+        run: |
+          git add seeds/photos
+          if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Add the fetched seed photos"
+          git push

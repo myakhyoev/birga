@@ -118,6 +118,8 @@ func validate(p domain.Post) error {
 		return errs.Errf(errs.ErrValidation, "title_uz, title_ru and title_en are required")
 	case uuid.Validate(p.VideoID) != nil:
 		return errs.Errf(errs.ErrValidation, "video_id must be a media id (UUID) from POST /v1/admin/media")
+	case p.PhotoID != nil && *p.PhotoID != "" && uuid.Validate(*p.PhotoID) != nil:
+		return errs.Errf(errs.ErrValidation, "photo_id must be a media id (UUID) of an uploaded image")
 	case uuid.Validate(p.GoalID) != nil:
 		return errs.Errf(errs.ErrValidation, "goal_id must be a goal id (UUID) from GET /v1/goals")
 	case p.MinAge < domain.MinChildAge || p.MaxAge > domain.MaxChildAge || p.MinAge > p.MaxAge:

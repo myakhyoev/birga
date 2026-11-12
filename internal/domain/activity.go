@@ -27,6 +27,7 @@ type Activity struct {
 	HarderRu        string
 	HarderEn        string
 	Difficulty      string   // DifficultyEasy, DifficultyNormal or DifficultyDifficult
+	PhotoID         *string  // picture of the activity, a media id; nil means none
 	GoalIDs         []string // ids of the goals table rows the activity serves, at least one
 	MinAge          int
 	MaxAge          int
@@ -98,6 +99,7 @@ type ActivityUpdate struct {
 	HarderRu        *string
 	HarderEn        *string
 	Difficulty      *string
+	PhotoID         *string  // "" removes the picture
 	GoalIDs         []string // nil keeps the goals; a non-nil list replaces them
 	MinAge          *int
 	MaxAge          *int
@@ -109,6 +111,6 @@ type ActivityUpdate struct {
 func (u ActivityUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.DescriptionUz == nil && u.DescriptionRu == nil &&
 		u.DescriptionEn == nil && u.MainIdeaUz == nil && u.MainIdeaRu == nil && u.MainIdeaEn == nil &&
-		u.EasierUz == nil && u.EasierRu == nil && u.EasierEn == nil && u.HarderUz == nil && u.HarderRu == nil && u.HarderEn == nil && u.Difficulty == nil &&
+		u.EasierUz == nil && u.EasierRu == nil && u.EasierEn == nil && u.HarderUz == nil && u.HarderRu == nil && u.HarderEn == nil && u.Difficulty == nil && u.PhotoID == nil &&
 		u.GoalIDs == nil && u.MinAge == nil && u.MaxAge == nil && u.DurationMinutes == nil && u.IsPublished == nil
 }

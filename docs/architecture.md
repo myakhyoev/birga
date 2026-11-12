@@ -37,7 +37,7 @@ testable with small fakes.
 
 | Path | Purpose |
 |---|---|
-| `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations |
+| `cmd/server/` | entrypoint: reads env config, handles SIGINT/SIGTERM, top-level swagger annotations; `birga_backend seed-photos <dir>` runs the seed photo step instead of the API |
 | `internal/config/` | `config.Application`, loaded from environment variables ([setup.md](setup.md#configuration)) |
 | `internal/bootstrap/` | wires everything: logger, DB pool, `dbstore`, drivers, use cases, REST server; runs teardown on shutdown |
 | `internal/domain/` | business types (`Activity`, `ActivityFilter`, `ActivityUpdate`, `Completion`, `CompletionFilter`, `Streak`, `StreakDay`, `Plan`, `PlanItem`, `PlanDay`, `PlanPick`, `User`, `UserUpdate`, `UserFilter`, `OTPPurpose`, `OTPSendRequest`, `OTPVerifyRequest`, `OTPLimits`, `OTPVerifyOutcome`, `Media`, `MediaUpload`, `SignUpRequest`, `TokenPair`, `AccessToken`, `UserAuth`, `UserRole`, `TokenClaims`, `Principal`, `Child`, `Goal`, `GoalUpdate`, `Article`, `ArticleUpdate`, `ArticleFilter`, `DailyArticle`, `DailyArticles`, `Post`, `PostUpdate`, `PostFilter`, `DailyPost`, `DailyPosts`), constants and format checks (relationships, goal names, age range, username, phone, Uzbek phone, OTP code), OTP and token hashing, the local day (`Location`, `LocalDay`) and the streak calculation (`ComputeStreak`, `StreakDays`), the plan rules (`PlanGoals`, `BuildPlanDays`), and `NormalizeIDs` for lists of goal ids |
@@ -46,7 +46,7 @@ testable with small fakes.
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
 | `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `child_updater`, `plan_getter`, `goal_creator`, `goal_getter`, `goal_lister`, `goal_updater`, `goal_deleter`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `user_login`, `user_logout`, `token_refresher`, `profile_updater`, `password_resetter`, `article_creator`, `article_getter`, `article_lister`, `article_updater`, `article_deleter`, `article_reader`, `daily_article`, `post_creator`, `post_getter`, `post_lister`, `post_updater`, `post_deleter`, `daily_post`, `topic_manager`, `tip_manager`, `daily_tip`, `pro_plan`, `today_list`, `milestone_manager`, `child_milestones`. The newer packages group the admin actions of one entity (create, get, list, update, delete) as methods of one use case instead of one package per action |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `child_updater`, `plan_getter`, `goal_creator`, `goal_getter`, `goal_lister`, `goal_updater`, `goal_deleter`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `user_login`, `user_logout`, `token_refresher`, `profile_updater`, `password_resetter`, `article_creator`, `article_getter`, `article_lister`, `article_updater`, `article_deleter`, `article_reader`, `daily_article`, `post_creator`, `post_getter`, `post_lister`, `post_updater`, `post_deleter`, `daily_post`, `topic_manager`, `tip_manager`, `daily_tip`, `pro_plan`, `today_list`, `milestone_manager`, `child_milestones`, `photo_seeder`. The newer packages group the admin actions of one entity (create, get, list, update, delete) as methods of one use case instead of one package per action |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
@@ -77,6 +77,11 @@ resource that needs closing:
 for a signal or a server error. Teardown runs in reverse order: the HTTP server gets 10 seconds
 to finish in-flight requests, then the Redis client and the DB pool close, then the logger
 flushes. `/health` pings both PostgreSQL and Redis (`bootstrap.healthCheck`).
+
+`birga_backend seed-photos <dir>` (a deploy step, see [operations.md, "Seed photos"](operations.md#seed-photos))
+does not start the API: `bootstrap.SeedPhotos` builds only the logger, the S3 client, the
+database pool and `media_uploader`, runs `photo_seeder` over `<dir>/sources.tsv` and exits. It
+needs no Redis, and does nothing when S3 is not configured.
 
 ## Request flow
 

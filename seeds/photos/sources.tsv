@@ -1,0 +1,46 @@
+# Seed photos: one generated picture per starter activity, sample article and sample video.
+# Columns (tab separated): kind, key, file, source URL.
+#   kind activity: key is the activity's title_uz; article/post: key is the row id from migration 000024.
+#   file is the JPEG under seeds/photos/; the Fetch seed photos workflow downloads a missing file from its URL.
+# Generated with Figma's image generator (gpt-image-2.5-flare) in the Figma file "Birga content photos"
+# (LU3cVmnWzBZXRVqtjXn10i). The URLs expire after 7 days; the committed JPEGs are the source of truth.
+activity	Kim qanday ovoz chiqaradi?	activities/kim-qanday-ovoz-chiqaradi.jpg	https://www.figma.com/api/mcp/asset/d31cddc9-0147-4d25-b2e0-a5b445fd79aa.png
+activity	Qopdagi sirli narsa	activities/qopdagi-sirli-narsa.jpg	https://www.figma.com/api/mcp/asset/fb00b23f-6a16-420b-ab3b-e488f21fab75.png
+activity	Bugun nima qildik?	activities/bugun-nima-qildik.jpg	https://www.figma.com/api/mcp/asset/ebff8f18-7598-4e8f-b1b4-f93166f5526e.png
+activity	Yostiq yo'lagi	activities/yostiq-yolagi.jpg	https://www.figma.com/api/mcp/asset/5faf325f-359d-44ff-bf2f-385754629945.png
+activity	Qog'oz yirtib rasm	activities/qogoz-yirtib-rasm.jpg	https://www.figma.com/api/mcp/asset/23b1c4c6-e329-4aef-a6fe-41e691cd655f.png
+activity	Ip o'tkazish	activities/ip-otkazish.jpg	https://www.figma.com/api/mcp/asset/40042145-37a5-4faa-85c6-016bf0f1edc2.png
+activity	Rangli toshlar	activities/rangli-toshlar.jpg	https://www.figma.com/api/mcp/asset/da810ad4-01ce-4633-b97c-95020ba5a7c8.png
+activity	Nima yo'qoldi?	activities/nima-yoqoldi.jpg	https://www.figma.com/api/mcp/asset/9147a5ae-0231-4a0d-a032-7316717865f0.png
+activity	Navbat bilan minora	activities/navbat-bilan-minora.jpg	https://www.figma.com/api/mcp/asset/43ca928b-a69c-4486-b726-050190214248.png
+activity	Do'konchilik o'yini	activities/dokonchilik-oyini.jpg	https://www.figma.com/api/mcp/asset/d04119ef-c1cd-4441-ad91-5651d73c654b.png
+activity	Tuyg'ular detektivi	activities/tuygular-detektivi.jpg	https://www.figma.com/api/mcp/asset/bf9f08b3-b1cd-4f80-ac89-a4afb18706ad.png
+activity	Sharni puflaymiz	activities/sharni-puflaymiz.jpg	https://www.figma.com/api/mcp/asset/5a7ecc60-3957-496e-af9f-97012fcb33f0.png
+activity	Kichik yordamchi	activities/kichik-yordamchi.jpg	https://www.figma.com/api/mcp/asset/385e7c2f-c94e-45fa-a0de-25722095328d.png
+activity	Buvijonga sovg'a	activities/buvijonga-sovga.jpg	https://www.figma.com/api/mcp/asset/41bad8a1-9043-424e-8dd8-45db14c7fe01.png
+activity	Yangi ta'm	activities/yangi-tam.jpg	https://www.figma.com/api/mcp/asset/c8b13642-d1f6-4cf0-9301-4691a28079d1.png
+activity	Suvda nima cho'kadi?	activities/suvda-nima-chokadi.jpg	https://www.figma.com/api/mcp/asset/04d7d6a1-3f7b-4463-8f3b-3a6dce312946.png
+activity	Kichik bayram	activities/kichik-bayram.jpg	https://www.figma.com/api/mcp/asset/2a08070c-831f-4e07-9574-bde49948a488.png
+activity	Ovozni top	activities/ovozni-top.jpg	https://www.figma.com/api/mcp/asset/ce9b00c8-ae52-4d8b-8d95-4db731355245.png
+activity	Qutidan uy	activities/qutidan-uy.jpg	https://www.figma.com/api/mcp/asset/a11e0546-2561-42e3-8b84-4bff9d9cfe51.png
+activity	Nima ortiqcha?	activities/nima-ortiqcha.jpg	https://www.figma.com/api/mcp/asset/01991655-005d-4895-adc5-28855aa0e6b2.png
+article	5a2e0000-0000-4000-8000-000000000001	articles/01.jpg	https://www.figma.com/api/mcp/asset/ab8db8e2-16b3-4620-ba6d-37ec4375aa6f.png
+article	5a2e0000-0000-4000-8000-000000000002	articles/02.jpg	https://www.figma.com/api/mcp/asset/a4456b04-a970-4e41-af11-7998aead792b.png
+article	5a2e0000-0000-4000-8000-000000000003	articles/03.jpg	https://www.figma.com/api/mcp/asset/8e88ff90-35c5-44e5-952e-70a07d3a03d7.png
+article	5a2e0000-0000-4000-8000-000000000004	articles/04.jpg	https://www.figma.com/api/mcp/asset/fa8c7dd3-e43b-4c83-9510-56a3c43ce8d1.png
+article	5a2e0000-0000-4000-8000-000000000005	articles/05.jpg	https://www.figma.com/api/mcp/asset/1122e9e5-db4f-45ae-a7b9-76011542fcf3.png
+article	5a2e0000-0000-4000-8000-000000000006	articles/06.jpg	https://www.figma.com/api/mcp/asset/6e7be5d9-3002-42a1-af9d-a89e22f3aa90.png
+article	5a2e0000-0000-4000-8000-000000000007	articles/07.jpg	https://www.figma.com/api/mcp/asset/8d6fc9e9-3e57-43c6-b543-8bc2f808abb0.png
+article	5a2e0000-0000-4000-8000-000000000008	articles/08.jpg	https://www.figma.com/api/mcp/asset/7a7fcc15-46a9-4145-9687-57164675a14c.png
+article	5a2e0000-0000-4000-8000-000000000010	articles/10.jpg	https://www.figma.com/api/mcp/asset/2b9a9bee-e26c-4a9c-986d-94fddab91ed9.png
+post	5a3e0000-0000-4000-8000-000000000001	posts/01.jpg	https://www.figma.com/api/mcp/asset/b0ac83f4-00d0-4590-9092-b92b65377278.png
+article	5a2e0000-0000-4000-8000-000000000009	articles/09.jpg	https://www.figma.com/api/mcp/asset/75a6fd2b-e4b2-4dab-bcd0-07b130d4f2e4.png
+post	5a3e0000-0000-4000-8000-000000000002	posts/02.jpg	https://www.figma.com/api/mcp/asset/28abd175-b93a-4d81-99ee-9492df0e12d5.png
+post	5a3e0000-0000-4000-8000-000000000003	posts/03.jpg	https://www.figma.com/api/mcp/asset/17e9eeed-2d92-403a-979e-f539de644644.png
+post	5a3e0000-0000-4000-8000-000000000004	posts/04.jpg	https://www.figma.com/api/mcp/asset/d580a162-c3ed-4818-89df-6266747aae47.png
+post	5a3e0000-0000-4000-8000-000000000005	posts/05.jpg	https://www.figma.com/api/mcp/asset/f1f2d2c8-37d3-4776-bb09-21def4940b1f.png
+post	5a3e0000-0000-4000-8000-000000000006	posts/06.jpg	https://www.figma.com/api/mcp/asset/7d34ff0e-2a39-41e3-a459-ebe992f5ae05.png
+post	5a3e0000-0000-4000-8000-000000000007	posts/07.jpg	https://www.figma.com/api/mcp/asset/891e691e-6e59-43f1-99dc-b6defb12fb44.png
+post	5a3e0000-0000-4000-8000-000000000008	posts/08.jpg	https://www.figma.com/api/mcp/asset/6147ba6c-70f8-4182-b454-64ef5cd1b5ae.png
+post	5a3e0000-0000-4000-8000-000000000009	posts/09.jpg	https://www.figma.com/api/mcp/asset/d3319a9d-2cb1-47ae-963d-32392de6c96d.png
+post	5a3e0000-0000-4000-8000-000000000010	posts/10.jpg	https://www.figma.com/api/mcp/asset/8bdece3b-056c-4568-a3a1-87e8bee22f5e.png

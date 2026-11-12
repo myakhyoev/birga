@@ -104,6 +104,8 @@ func validate(upd domain.ActivityUpdate) error {
 	case upd.Difficulty != nil && !domain.ValidDifficulty(*upd.Difficulty):
 		return errs.Errf(errs.ErrValidation, "difficulty must be %s, %s or %s",
 			domain.DifficultyEasy, domain.DifficultyNormal, domain.DifficultyDifficult)
+	case upd.PhotoID != nil && *upd.PhotoID != "" && uuid.Validate(*upd.PhotoID) != nil:
+		return errs.Errf(errs.ErrValidation, "photo_id must be a media id (UUID) from POST /v1/media, or \"\" to remove the photo")
 	}
 
 	for _, id := range upd.GoalIDs {

@@ -33,5 +33,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// `birga_backend seed-photos <dir>` attaches the starter pictures (deploy step), then exits.
+	if len(os.Args) == 3 && os.Args[1] == "seed-photos" { //nolint:mnd
+		if err := bootstrap.SeedPhotos(ctx, cfg, os.Args[2]); err != nil {
+			stop()
+			log.Fatal(err) //nolint:gocritic
+		}
+
+		return
+	}
+
 	bootstrap.New(cfg).Run(ctx)
 }

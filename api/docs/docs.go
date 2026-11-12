@@ -425,7 +425,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6\n- main_idea_uz/ru/en are optional (the \"Katta g'oya\" box); empty hides the box in the app\n- difficulty is easy, normal or difficult (default normal); plans pick normal ones first",
+                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6\n- main_idea_uz/ru/en are optional (the \"Katta g'oya\" box); empty hides the box in the app\n- difficulty is easy, normal or difficult (default normal); plans pick normal ones first\n- photo_id is an optional picture, an id from POST /v1/media or /v1/admin/media (422 if unknown)",
                 "consumes": [
                     "application/json"
                 ],
@@ -623,7 +623,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)\n- goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids\n- send {\"is_published\": true} to publish, false to hide it from the app",
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)\n- goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids\n- send {\"is_published\": true} to publish, false to hide it from the app\n- photo_id \"\" removes the picture",
                 "consumes": [
                     "application/json"
                 ],
@@ -1949,7 +1949,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app",
+                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- photo_id is an optional cover picture, an image uploaded with POST /v1/admin/media (422 if unknown)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app",
                 "consumes": [
                     "application/json"
                 ],
@@ -2147,7 +2147,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles cannot be emptied; suggestion_*/questions_* \"\" removes them\n- the resulting age range must stay valid (422)\n- send {\"status\": \"published\"} to show it in the app, \"in_review\" or \"unpublished\" to hide it",
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles cannot be emptied; suggestion_*/questions_* \"\" removes them; photo_id \"\" removes the cover\n- the resulting age range must stay valid (422)\n- send {\"status\": \"published\"} to show it in the app, \"in_review\" or \"unpublished\" to hide it",
                 "consumes": [
                     "application/json"
                 ],
@@ -6895,6 +6895,10 @@ const docTemplate = `{
                     "minimum": 2,
                     "example": 3
                 },
+                "photo_id": {
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
                 "title_en": {
                     "type": "string",
                     "example": "Colourful stones"
@@ -7072,6 +7076,11 @@ const docTemplate = `{
                     "maximum": 6,
                     "minimum": 2,
                     "example": 3
+                },
+                "photo_id": {
+                    "description": "PhotoID is the optional cover picture, an image from POST /v1/admin/media; null means none.",
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
                 "questions_en": {
                     "type": "string",
@@ -7710,6 +7719,11 @@ const docTemplate = `{
                     "minimum": 2,
                     "example": 3
                 },
+                "photo_id": {
+                    "description": "PhotoID \"\" removes the picture.",
+                    "type": "string",
+                    "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
                 "title_en": {
                     "type": "string",
                     "example": "Colourful stones"
@@ -7880,6 +7894,11 @@ const docTemplate = `{
                     "maximum": 6,
                     "minimum": 2,
                     "example": 3
+                },
+                "photo_id": {
+                    "description": "PhotoID \"\" removes the cover picture.",
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
                 "questions_en": {
                     "type": "string"
@@ -8164,6 +8183,16 @@ const docTemplate = `{
                 "min_age": {
                     "type": "integer",
                     "example": 3
+                },
+                "photo_id": {
+                    "description": "PhotoID is the activity's picture, a media id; null without one.",
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "photo_url": {
+                    "description": "PhotoURL is where to load the picture from (GET, no token); null without one.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
                 "title_en": {
                     "type": "string",
@@ -9226,6 +9255,16 @@ const docTemplate = `{
                 "min_age": {
                     "type": "integer",
                     "example": 3
+                },
+                "photo_id": {
+                    "description": "PhotoID is the cover picture, a media id; null without one.",
+                    "type": "string",
+                    "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "photo_url": {
+                    "description": "PhotoURL is where to load the cover from (GET, no token); null without one.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
                 "questions_en": {
                     "type": "string"
