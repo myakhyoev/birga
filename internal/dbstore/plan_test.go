@@ -112,6 +112,5 @@ func TestPlanRepo(t *testing.T) {
 		if err := s.Plan().LockChild(ctx, child.ID); err != nil {
 			t.Fatalf("LockChild: %v", err)
 		}
-
 	})
 }

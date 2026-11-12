@@ -271,7 +271,7 @@ func tipSet(upd domain.TipUpdate) (string, []any) {
 		value  *string
 	}{
 		{"text_uz", upd.TextUz}, {"text_ru", upd.TextRu}, {"text_en", upd.TextEn},
-		{"topic_id", upd.TopicID}, {"status", upd.Status},
+		{"topic_id", upd.TopicID}, {colStatus, upd.Status},
 	} {
 		if f.value != nil {
 			add(f.column, *f.value)

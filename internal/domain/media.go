@@ -125,6 +125,8 @@ type MediaVariantSpec struct {
 
 // mediaVariantSpecs are the sizes made for each kind. All variants of a kind except "small" have the
 // kind's shape, so the frame an admin picks works for each; "small" is the centre square of that frame.
+//
+//nolint:mnd // the size table itself
 var mediaVariantSpecs = map[MediaKind][]MediaVariantSpec{
 	MediaKindProfile: {
 		{Name: MediaSizeMain, Width: 800, Height: 800},

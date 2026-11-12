@@ -321,7 +321,8 @@ type UpdateActivityRequest struct {
 // UpdateActivity godoc swagger
 // @Summary updates an activity partially, including publishing or unpublishing it
 // @Description - only the fields present in the body change; omitted or null fields are kept
-// @Description - same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)
+// @Description - same rules as create; titles and descriptions cannot be emptied, main_idea_* can;
+// @Description   the resulting age range must stay valid (422)
 // @Description - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
 // @Description - send {"is_published": true} to publish, false to hide it from the app
 // @Description - photo_id "" removes the picture

@@ -317,7 +317,8 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 	)
 
 	if drv.s3 != nil {
-		mediaUploader = mediauploader.New(l.Named("usecase.media_uploader"), store.Media(), drv.s3, cfg.Media.MaxSize, cfg.S3.KeyPrefix, cfg.Media.LinkTTL)
+		mediaUploader = mediauploader.New(l.Named("usecase.media_uploader"), store.Media(), drv.s3,
+			cfg.Media.MaxSize, cfg.S3.KeyPrefix, cfg.Media.LinkTTL)
 		mediaVariants = mediavariants.New(l.Named("usecase.media_variants"), store.Media(), drv.s3, cfg.S3.KeyPrefix)
 		mediaUploader.OnUpload(mediaVariants.Wake)
 	}

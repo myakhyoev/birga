@@ -665,6 +665,8 @@ func toPlanView(p domain.Plan) planView {
 	return v
 }
 
+const monthsPerYear = 12
+
 // ageMonthsOf picks age_months, or the old age field in years turned into months.
 func ageMonthsOf(months, years *int) *int {
 	if months != nil {
@@ -672,7 +674,7 @@ func ageMonthsOf(months, years *int) *int {
 	}
 
 	if years != nil {
-		m := *years * 12
+		m := *years * monthsPerYear
 
 		return &m
 	}

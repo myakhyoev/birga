@@ -56,7 +56,7 @@ func (uc *UseCase) Days(ctx context.Context, userID, childID string, from, to ti
 	}
 
 	if from.IsZero() {
-		from = to.AddDate(0, 0, -27) //nolint:mnd // four weeks
+		from = to.AddDate(0, 0, -27) // four weeks
 	}
 
 	if from.After(to) || to.Sub(from) >= domain.MaxStreakDays*24*time.Hour {

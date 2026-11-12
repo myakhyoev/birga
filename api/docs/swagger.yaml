@@ -3042,7 +3042,8 @@ paths:
       - application/json
       description: |-
         - only the fields present in the body change; omitted or null fields are kept
-        - same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)
+        - same rules as create; titles and descriptions cannot be emptied, main_idea_* can;
+        the resulting age range must stay valid (422)
         - goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids
         - send {"is_published": true} to publish, false to hide it from the app
         - photo_id "" removes the picture
@@ -5605,8 +5606,9 @@ paths:
       tags:
       - children
     put:
-      description: Any parent of the child may mark, on any plan. Marking again keeps
-        the first time. 404 for an unknown or unpublished milestone.
+      description: |-
+        Any parent of the child may mark, on any plan. Marking again keeps the first time.
+        404 for an unknown or unpublished milestone.
       parameters:
       - description: child id (UUID)
         in: path

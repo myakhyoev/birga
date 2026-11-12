@@ -6,7 +6,9 @@
 - Docker with the compose plugin (on macOS, Docker Desktop or colima)
 - Optional, for running parts outside Docker:
   - [golang-migrate](https://github.com/golang-migrate/migrate) CLI (`migrate`) for `make migrate-*`
-  - [golangci-lint](https://golangci-lint.run) v2 for `make lint-go`
+  - [golangci-lint](https://golangci-lint.run) v2.15.0 or newer, built with Go 1.27, for `make lint-go`
+    (`GOTOOLCHAIN=go1.27.1 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0`;
+    older releases crash on the Go 1.27 standard library)
 
 ## Get the code
 

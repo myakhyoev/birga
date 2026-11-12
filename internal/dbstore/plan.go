@@ -95,7 +95,7 @@ func (r *planRepo) Current(ctx context.Context, childID string) (domain.Plan, []
 		items = append(items, domain.PlanItem{
 			Day:         int(row.Day),
 			GoalID:      row.DayGoalID,
-			Activity:    row.dbActivity.toDomain(),
+			Activity:    row.toDomain(),
 			CompletedOn: row.CompletedOn,
 		})
 		usable = append(usable, row.Usable)

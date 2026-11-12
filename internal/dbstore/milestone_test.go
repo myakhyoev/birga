@@ -137,7 +137,6 @@ func TestMilestoneRepo_Child(t *testing.T) {
 		if m, err := repo.GetForChild(ctx, talk, child.ID); err != nil || m.Achieved {
 			t.Fatalf("after Unmark: %+v %v", m, err)
 		}
-
 	})
 }
 

@@ -8,7 +8,7 @@ variables:
 
 lint:
   stage: lint
-  image: golangci/golangci-lint:v2.12.2
+  image: golangci/golangci-lint:v2.15.0
   script:
     - golangci-lint run -c .golangci.yml ./...
 

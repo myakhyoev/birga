@@ -60,6 +60,13 @@ type DBStore struct {
 	milestoneRepo  *milestoneRepo
 }
 
+// Column names shared by several update builders.
+const (
+	colGoalID = "goal_id"
+	colStatus = "status"
+	colSource = "source"
+)
+
 func (s *DBStore) Activity() *activityRepo {
 	return s.activityRepo
 }

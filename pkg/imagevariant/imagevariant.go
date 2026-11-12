@@ -89,13 +89,13 @@ func Frame(b image.Rectangle, crop *Rect, aspect float64) image.Rectangle {
 	w, h := float64(r.Dx()), float64(r.Dy())
 	if w/h > aspect { // too wide: trim the sides
 		nw := int(math.Round(h * aspect))
-		x := r.Min.X + (r.Dx()-nw)/2
+		x := r.Min.X + (r.Dx()-nw)/2 //nolint:mnd // centred: half of the rest on each side
 
 		return image.Rect(x, r.Min.Y, x+max(nw, 1), r.Max.Y)
 	}
 
 	nh := int(math.Round(w / aspect)) // too tall: trim top and bottom
-	y := r.Min.Y + (r.Dy()-nh)/2
+	y := r.Min.Y + (r.Dy()-nh)/2      //nolint:mnd // centred
 
 	return image.Rect(r.Min.X, y, r.Max.X, y+max(nh, 1))
 }

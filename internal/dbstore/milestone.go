@@ -353,7 +353,7 @@ func milestoneSet(upd domain.MilestoneUpdate) (string, []any) {
 		column string
 		value  *string
 	}{
-		{"domain", upd.Domain}, {"status", upd.Status},
+		{"domain", upd.Domain}, {colStatus, upd.Status},
 		{"text_uz", upd.TextUz}, {"text_ru", upd.TextRu}, {"text_en", upd.TextEn},
 		{"meaning_uz", upd.MeaningUz}, {"meaning_ru", upd.MeaningRu}, {"meaning_en", upd.MeaningEn},
 		{"how_to_uz", upd.HowToUz}, {"how_to_ru", upd.HowToRu}, {"how_to_en", upd.HowToEn},

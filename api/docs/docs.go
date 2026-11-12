@@ -635,7 +635,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles and descriptions cannot be emptied, main_idea_* can; the resulting age range must stay valid (422)\n- goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids\n- send {\"is_published\": true} to publish, false to hide it from the app\n- photo_id \"\" removes the picture",
+                "description": "- only the fields present in the body change; omitted or null fields are kept\n- same rules as create; titles and descriptions cannot be emptied, main_idea_* can;\nthe resulting age range must stay valid (422)\n- goal_ids, when sent, replaces the whole list and must hold 1 to 5 active goal ids\n- send {\"is_published\": true} to publish, false to hide it from the app\n- photo_id \"\" removes the picture",
                 "consumes": [
                     "application/json"
                 ],
@@ -4499,7 +4499,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Any parent of the child may mark, on any plan. Marking again keeps the first time. 404 for an unknown or unpublished milestone.",
+                "description": "Any parent of the child may mark, on any plan. Marking again keeps the first time.\n404 for an unknown or unpublished milestone.",
                 "produces": [
                     "application/json"
                 ],
