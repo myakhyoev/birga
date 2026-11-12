@@ -81,7 +81,7 @@ func TestActivityRepo_CreateGet(t *testing.T) {
 			t.Fatalf("Create: %v", err)
 		}
 
-		if created.ID == "" || created.CreatedAt.IsZero() {
+		if created.ID == "" || created.CreatedAt.IsZero() || created.Source != domain.SourceAdmin {
 			t.Fatalf("defaults not returned: %+v", created)
 		}
 
@@ -116,6 +116,7 @@ func TestActivityRepo_List(t *testing.T) {
 			activity(social, 2, 6, true),
 			activity(motor, 2, 6, false),
 			both,
+			func() domain.Activity { a := activity(social, 2, 6, false); a.Source = domain.SourceHarvard; return a }(),
 		} {
 			if _, err := s.Activity().Create(ctx, a); err != nil {
 				t.Fatalf("Create: %v", err)
@@ -127,11 +128,13 @@ func TestActivityRepo_List(t *testing.T) {
 			f     domain.ActivityFilter
 			total int
 		}{
-			{"all", domain.ActivityFilter{Limit: 10}, 5},
+			{"all", domain.ActivityFilter{Limit: 10}, 6},
 			{"published", domain.ActivityFilter{PublishedOnly: true, Limit: 10}, 4},
+			{"harvard", domain.ActivityFilter{Source: domain.SourceHarvard, Limit: 10}, 1},
+			{"admin", domain.ActivityFilter{Source: domain.SourceAdmin, Limit: 10}, 5},
 			{"goal+published", domain.ActivityFilter{GoalID: motor, PublishedOnly: true, Limit: 10}, 3},
 			{"age 5", domain.ActivityFilter{Age: 5, PublishedOnly: true, Limit: 10}, 3},
-			{"paged", domain.ActivityFilter{Limit: 1, Offset: 1}, 5},
+			{"paged", domain.ActivityFilter{Limit: 1, Offset: 1}, 6},
 		}
 
 		for _, tc := range cases {

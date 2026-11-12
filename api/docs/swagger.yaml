@@ -146,6 +146,14 @@ definitions:
       photo_id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: admin
+        type: string
       title_en:
         example: Colourful stones
         type: string
@@ -188,6 +196,14 @@ definitions:
         type: integer
       photo_id:
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: admin
         type: string
       status:
         enum:
@@ -303,6 +319,14 @@ definitions:
         example: |-
           «Qaysi rang senga eng ko‘p yoqdi?»
           «Uyimizda qizil rangli nima bor?»
+        type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: admin
         type: string
       status:
         enum:
@@ -742,6 +766,14 @@ definitions:
         description: PhotoID "" removes the picture.
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
         type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: harvard
+        type: string
       title_en:
         example: Colourful stones
         type: string
@@ -781,6 +813,14 @@ definitions:
       photo_id:
         description: PhotoID "" removes the photo.
         example: 3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f
+        type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: harvard
         type: string
       status:
         enum:
@@ -880,6 +920,14 @@ definitions:
       questions_ru:
         type: string
       questions_uz:
+        type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: harvard
         type: string
       status:
         enum:
@@ -1090,6 +1138,16 @@ definitions:
           without one.
         example: /v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
         type: string
+      source:
+        description: 'Source is where the activity comes from: test, admin, harvard
+          or ai.'
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: admin
+        type: string
       title_en:
         example: Colourful stones
         type: string
@@ -1169,6 +1227,14 @@ definitions:
         description: PhotoURL is where the app loads the photo from (GET, no token);
           null without a photo.
         example: /v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
+        type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: admin
         type: string
       status:
         enum:
@@ -1877,6 +1943,14 @@ definitions:
         type: string
       questions_uz:
         type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: admin
+        type: string
       status:
         enum:
         - published
@@ -2288,6 +2362,14 @@ definitions:
           null without a photo.
         example: /v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a
         type: string
+      source:
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        example: admin
+        type: string
       status:
         enum:
         - published
@@ -2629,6 +2711,15 @@ paths:
         in: query
         name: status
         type: string
+      - description: only activities of this source
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        in: query
+        name: source
+        type: string
       - description: page size (default 20, max 100)
         in: query
         name: limit
@@ -2680,6 +2771,7 @@ paths:
         - min_age/max_age are child ages in years, within 2..6
         - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
         - difficulty is easy, normal or difficult (default normal); plans pick normal ones first
+        - source is where the activity comes from: test, admin, harvard or ai (default admin)
         - photo_id is an optional picture, an id from POST /v1/media or /v1/admin/media (422 if unknown)
       parameters:
       - description: activity
@@ -2875,6 +2967,15 @@ paths:
         in: query
         name: status
         type: string
+      - description: only content of this source
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        in: query
+        name: source
+        type: string
       - description: goal id (UUID) from GET /v1/goals
         in: query
         name: goal_id
@@ -2942,6 +3043,7 @@ paths:
         - photo_id is an optional id from POST /v1/media (422 if unknown)
         - expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6
         - status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app
+        - source is where it comes from: test, admin, harvard or ai; omitted means admin
       parameters:
       - description: article
         in: body
@@ -3597,6 +3699,15 @@ paths:
         in: query
         name: status
         type: string
+      - description: only content of this source
+        enum:
+        - test
+        - admin
+        - harvard
+        - ai
+        in: query
+        name: source
+        type: string
       - description: goal id (UUID) from GET /v1/goals
         in: query
         name: goal_id
@@ -3667,6 +3778,7 @@ paths:
         - duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600
         - min_age/max_age are child ages within 2..6
         - status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app
+        - source is where it comes from: test, admin, harvard or ai; omitted means admin
       parameters:
       - description: post
         in: body

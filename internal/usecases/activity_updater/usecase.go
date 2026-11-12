@@ -62,6 +62,15 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.ActivityUp
 		upd.Difficulty = &v
 	}
 
+	if upd.Source != nil {
+		v := domain.NormalizeSource(*upd.Source)
+		if !domain.ValidSource(v) {
+			return domain.Activity{}, errs.ErrUnknownSource
+		}
+
+		upd.Source = &v
+	}
+
 	if err := validate(upd); err != nil {
 		return domain.Activity{}, err
 	}

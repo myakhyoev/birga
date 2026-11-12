@@ -31,6 +31,7 @@ type CreatePostRequest struct {
 	QuestionsRu  string  `json:"questions_ru" example:"«Какой цвет тебе понравился больше всего?»\n«Что у нас дома красное?»"`
 	QuestionsEn  string  `json:"questions_en" example:"\"Which colour did you like most?\"\n\"What is red in our home?\""`
 	Status       string  `json:"status" example:"in_review" enums:"published,in_review,unpublished"`
+	Source       string  `json:"source" example:"admin" enums:"test,admin,harvard,ai"`
 }
 
 // CreatePost godoc swagger
@@ -44,6 +45,7 @@ type CreatePostRequest struct {
 // @Description - duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600
 // @Description - min_age/max_age are child ages within 2..6
 // @Description - status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app
+// @Description - source is where it comes from: test, admin, harvard or ai; omitted means admin
 // @Tags admin
 // @Security AdminKey
 // @Accept json
@@ -82,6 +84,7 @@ func (s *Server) CreatePost() gin.HandlerFunc {
 			QuestionsRu:  req.QuestionsRu,
 			QuestionsEn:  req.QuestionsEn,
 			Status:       req.Status,
+			Source:       req.Source,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -100,6 +103,7 @@ func (s *Server) CreatePost() gin.HandlerFunc {
 // @Produce json
 // @Param q query string false "text the title (any language) contains, ignoring case (at most 100 characters)"
 // @Param status query string false "published, in_review or unpublished; omitted lists all" Enums(published, in_review, unpublished)
+// @Param source query string false "only content of this source" Enums(test, admin, harvard, ai)
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
@@ -120,6 +124,7 @@ func (s *Server) AdminListPosts() gin.HandlerFunc {
 		}
 
 		f.Status = c.Query("status")
+		f.Source = c.Query("source")
 
 		items, total, err := s.postLister.Execute(c.Request.Context(), f)
 		if err != nil {
@@ -190,6 +195,7 @@ type UpdatePostRequest struct {
 	QuestionsRu  *string  `json:"questions_ru"`
 	QuestionsEn  *string  `json:"questions_en"`
 	Status       *string  `json:"status" example:"published" enums:"published,in_review,unpublished"`
+	Source       *string  `json:"source" example:"harvard" enums:"test,admin,harvard,ai"`
 }
 
 // UpdatePost godoc swagger
@@ -245,6 +251,7 @@ func (s *Server) UpdatePost() gin.HandlerFunc {
 			QuestionsRu:  req.QuestionsRu,
 			QuestionsEn:  req.QuestionsEn,
 			Status:       req.Status,
+			Source:       req.Source,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -474,6 +481,7 @@ type postView struct {
 	QuestionsRu  string    `json:"questions_ru"`
 	QuestionsEn  string    `json:"questions_en"`
 	Status       string    `json:"status" example:"published" enums:"published,in_review,unpublished"`
+	Source       string    `json:"source" example:"admin" enums:"test,admin,harvard,ai"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -550,6 +558,7 @@ func toPostView(p domain.Post) postView {
 		QuestionsRu:  p.QuestionsRu,
 		QuestionsEn:  p.QuestionsEn,
 		Status:       p.Status,
+		Source:       p.Source,
 		CreatedAt:    p.CreatedAt,
 		UpdatedAt:    p.UpdatedAt,
 	}

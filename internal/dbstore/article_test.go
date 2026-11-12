@@ -36,15 +36,21 @@ func TestArticleRepo_CRUD(t *testing.T) {
 		a.TipEn = "try it"
 
 		created, err := s.Article().Create(ctx, a)
-		if err != nil || created.ID == "" || created.TipEn != "try it" || created.PhotoID != nil || created.Status != "in_review" {
+		if err != nil || created.ID == "" || created.TipEn != "try it" || created.PhotoID != nil || created.Status != "in_review" ||
+			created.Source != domain.SourceAdmin {
 			t.Fatalf("Create: %+v, %v", created, err)
 		}
 
 		upd, err := s.Article().Update(ctx, created.ID, domain.ArticleUpdate{
-			Status: strPtr(domain.ArticleStatusPublished), MinAge: intPtr(3), TipEn: strPtr(""),
+			Status: strPtr(domain.ArticleStatusPublished), MinAge: intPtr(3), TipEn: strPtr(""), Source: strPtr(domain.SourceAI),
 		})
-		if err != nil || upd.Status != "published" || upd.MinAge != 3 || upd.TipEn != "" || upd.TitleUz != "Sarlavha" {
+		if err != nil || upd.Status != "published" || upd.MinAge != 3 || upd.TipEn != "" || upd.TitleUz != "Sarlavha" ||
+			upd.Source != domain.SourceAI {
 			t.Fatalf("Update: %+v, %v", upd, err)
+		}
+
+		if _, total, err := s.Article().List(ctx, domain.ArticleFilter{Source: domain.SourceAI, Limit: 10}); err != nil || total < 1 {
+			t.Fatalf("List source=ai: total=%d, %v", total, err)
 		}
 
 		if err := s.Article().Delete(ctx, created.ID); err != nil {

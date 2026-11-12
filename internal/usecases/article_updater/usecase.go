@@ -59,6 +59,15 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.ArticleUpd
 		upd.Status = &v
 	}
 
+	if upd.Source != nil {
+		v := domain.NormalizeSource(*upd.Source)
+		if !domain.ValidSource(v) {
+			return domain.Article{}, errs.ErrUnknownSource
+		}
+
+		upd.Source = &v
+	}
+
 	if !domain.NormalizeTopicID(upd.TopicID) {
 		return domain.Article{}, errs.Errf(errs.ErrValidation, "topic_id must be a topic id (UUID) from GET /v1/topics, or \"\" for none")
 	}

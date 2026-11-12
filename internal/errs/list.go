@@ -71,6 +71,9 @@ var (
 	ErrNoDifficultyMatch = Errf(ErrNotFound, "no other published activity of this difficulty serves the goal at the child's age")
 )
 
+// ErrUnknownSource rejects a content source that is not test, admin, harvard or ai.
+var ErrUnknownSource = Errf(ErrValidation, "source must be test, admin, harvard or ai")
+
 var (
 	ErrMilestoneNotFound = Errf(ErrNotFound, "milestone not found")
 	ErrUnknownActivities = Errf(ErrValidation, "activity_ids contains ids that are not activities")

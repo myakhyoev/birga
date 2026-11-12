@@ -41,6 +41,7 @@ type dbPost struct {
 	QuestionsRu  string    `db:"questions_ru"`
 	QuestionsEn  string    `db:"questions_en"`
 	Status       string    `db:"status"`
+	Source       string    `db:"source"`
 	CreatedAt    time.Time `db:"created_at"`
 	UpdatedAt    time.Time `db:"updated_at"`
 }
@@ -49,7 +50,7 @@ type dbPost struct {
 const postColumns = `
 	p.id, p.title_uz, p.title_ru, p.title_en, p.video_id, p.photo_id, p.goal_id, p.topic_id, p.min_age, p.max_age,
 	p.duration::float8 AS duration, p.suggestion_uz, p.suggestion_ru, p.suggestion_en,
-	p.questions_uz, p.questions_ru, p.questions_en, p.status, p.created_at, p.updated_at`
+	p.questions_uz, p.questions_ru, p.questions_en, p.status, p.source, p.created_at, p.updated_at`
 
 func (r *postRepo) Create(ctx context.Context, p domain.Post) (domain.Post, error) {
 	l := logger.FromCtx(ctx, "postRepo.Create")
@@ -57,13 +58,13 @@ func (r *postRepo) Create(ctx context.Context, p domain.Post) (domain.Post, erro
 	q := `
 		INSERT INTO posts AS p (
 			title_uz, title_ru, title_en, video_id, goal_id, min_age, max_age, duration,
-			suggestion_uz, suggestion_ru, suggestion_en, questions_uz, questions_ru, questions_en, status, topic_id, photo_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			suggestion_uz, suggestion_ru, suggestion_en, questions_uz, questions_ru, questions_en, status, topic_id, photo_id, source
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, COALESCE(NULLIF($18, ''), 'admin'))
 		RETURNING ` + postColumns
 
 	return r.one(ctx, l, q,
 		p.TitleUz, p.TitleRu, p.TitleEn, p.VideoID, p.GoalID, p.MinAge, p.MaxAge, p.Duration,
-		p.SuggestionUz, p.SuggestionRu, p.SuggestionEn, p.QuestionsUz, p.QuestionsRu, p.QuestionsEn, p.Status, topicOrNull(p.TopicID), photoOrNull(p.PhotoID),
+		p.SuggestionUz, p.SuggestionRu, p.SuggestionEn, p.QuestionsUz, p.QuestionsRu, p.QuestionsEn, p.Status, topicOrNull(p.TopicID), photoOrNull(p.PhotoID), p.Source,
 	)
 }
 
@@ -298,6 +299,10 @@ func postWhere(f domain.PostFilter) (string, []any) {
 		add(func(n string) string { return "p.status = " + n }, f.Status)
 	}
 
+	if f.Source != "" {
+		add(func(n string) string { return "p.source = " + n }, f.Source)
+	}
+
 	if f.Search != "" {
 		add(func(n string) string {
 			return "(p.title_uz ILIKE " + n + " OR p.title_ru ILIKE " + n + " OR p.title_en ILIKE " + n + ")"
@@ -343,7 +348,7 @@ func postSet(upd domain.PostUpdate) (string, []any) {
 		{"video_id", upd.VideoID}, {"goal_id", upd.GoalID},
 		{"suggestion_uz", upd.SuggestionUz}, {"suggestion_ru", upd.SuggestionRu}, {"suggestion_en", upd.SuggestionEn},
 		{"questions_uz", upd.QuestionsUz}, {"questions_ru", upd.QuestionsRu}, {"questions_en", upd.QuestionsEn},
-		{"status", upd.Status},
+		{"status", upd.Status}, {"source", upd.Source},
 	} {
 		if f.value != nil {
 			add(f.column, *f.value)
@@ -393,6 +398,7 @@ func (p dbPost) toDomain() domain.Post {
 		QuestionsRu:  p.QuestionsRu,
 		QuestionsEn:  p.QuestionsEn,
 		Status:       p.Status,
+		Source:       p.Source,
 		CreatedAt:    p.CreatedAt,
 		UpdatedAt:    p.UpdatedAt,
 	}

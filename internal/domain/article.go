@@ -39,8 +39,10 @@ type Article struct {
 	MaxAge      int
 	GoalID      string
 	// TopicID is the optional topic tag; nil means none.
-	TopicID   *string
-	Status    string
+	TopicID *string
+	Status  string
+	// Source is where the article comes from: SourceTest, SourceAdmin, SourceHarvard or SourceAI.
+	Source    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	// IsRead tells whether the signed-in user marked the article read. It is only filled on
@@ -71,13 +73,14 @@ type ArticleUpdate struct {
 	// TopicID pointing to "" removes the topic.
 	TopicID *string
 	Status  *string
+	Source  *string
 }
 
 // IsEmpty reports whether the update changes nothing.
 func (u ArticleUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.BodyUz == nil && u.BodyRu == nil &&
 		u.BodyEn == nil && u.TipUz == nil && u.TipRu == nil && u.TipEn == nil && u.PhotoID == nil &&
-		u.ReadMinutes == nil && u.MinAge == nil && u.MaxAge == nil && u.GoalID == nil && u.TopicID == nil && u.Status == nil
+		u.ReadMinutes == nil && u.MinAge == nil && u.MaxAge == nil && u.GoalID == nil && u.TopicID == nil && u.Status == nil && u.Source == nil
 }
 
 // ArticleFilter narrows an article listing. Zero values mean "no filter".
@@ -89,6 +92,8 @@ type ArticleFilter struct {
 	Search string
 	// Status is one of the article statuses; empty lists all.
 	Status string
+	// Source keeps content of this source; empty lists all.
+	Source string
 	// MaxMinutes keeps articles of at most this expected read time.
 	MaxMinutes int
 	// LockFor, when set, marks the articles that were never this user's daily article as Locked.

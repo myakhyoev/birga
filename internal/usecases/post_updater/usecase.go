@@ -61,6 +61,15 @@ func (uc *UseCase) Execute(ctx context.Context, id string, upd domain.PostUpdate
 		upd.Status = &v
 	}
 
+	if upd.Source != nil {
+		v := domain.NormalizeSource(*upd.Source)
+		if !domain.ValidSource(v) {
+			return domain.Post{}, errs.ErrUnknownSource
+		}
+
+		upd.Source = &v
+	}
+
 	if err := validate(upd); err != nil {
 		return domain.Post{}, err
 	}

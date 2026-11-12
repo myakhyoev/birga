@@ -35,6 +35,7 @@ func (uc *UseCase) Execute(ctx context.Context, f domain.ActivityFilter) ([]doma
 	f.Search = strings.TrimSpace(f.Search)
 	f.Status = strings.ToLower(strings.TrimSpace(f.Status))
 	f.Difficulty = strings.ToLower(strings.TrimSpace(f.Difficulty))
+	f.Source = domain.NormalizeSource(f.Source)
 
 	if utf8.RuneCountInString(f.Search) > domain.MaxActivitySearchLength {
 		return nil, 0, errs.Errf(errs.ErrValidation, "q must be at most %d characters", domain.MaxActivitySearchLength)
@@ -47,6 +48,10 @@ func (uc *UseCase) Execute(ctx context.Context, f domain.ActivityFilter) ([]doma
 	if f.Difficulty != "" && !domain.ValidDifficulty(f.Difficulty) {
 		return nil, 0, errs.Errf(errs.ErrValidation, "difficulty must be %s, %s or %s",
 			domain.DifficultyEasy, domain.DifficultyNormal, domain.DifficultyDifficult)
+	}
+
+	if f.Source != "" && !domain.ValidSource(f.Source) {
+		return nil, 0, errs.ErrUnknownSource
 	}
 
 	if f.GoalID != "" && uuid.Validate(f.GoalID) != nil {

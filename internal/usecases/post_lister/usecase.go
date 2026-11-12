@@ -33,6 +33,7 @@ func New(l logger.Logger, repo postRepo) *UseCase {
 func (uc *UseCase) Execute(ctx context.Context, f domain.PostFilter) ([]domain.Post, int, error) {
 	f.Search = strings.TrimSpace(f.Search)
 	f.Status = strings.ToLower(strings.TrimSpace(f.Status))
+	f.Source = domain.NormalizeSource(f.Source)
 
 	switch {
 	case utf8.RuneCountInString(f.Search) > domain.MaxArticleSearchLength:
@@ -40,6 +41,8 @@ func (uc *UseCase) Execute(ctx context.Context, f domain.PostFilter) ([]domain.P
 	case f.Status != "" && !domain.IsKnownArticleStatus(f.Status):
 		return nil, 0, errs.Errf(errs.ErrValidation, "status must be %s, %s or %s",
 			domain.ArticleStatusPublished, domain.ArticleStatusInReview, domain.ArticleStatusUnpublished)
+	case f.Source != "" && !domain.ValidSource(f.Source):
+		return nil, 0, errs.ErrUnknownSource
 	case f.TopicID != "" && uuid.Validate(f.TopicID) != nil:
 		return nil, 0, errs.Errf(errs.ErrValidation, "topic_id must be a topic id (UUID), got %q", f.TopicID)
 	case f.GoalID != "" && uuid.Validate(f.GoalID) != nil:

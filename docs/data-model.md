@@ -29,6 +29,7 @@ Rows are soft-deleted by setting `deleted_at`.
 | `harder_uz`, `harder_ru`, `harder_en` | `TEXT` | no | `''` | the "Qiyinroq" variant (Birga Pro), optional (`000021`) |
 | `difficulty` | `TEXT` | no | `'normal'` | `easy`, `normal` or `difficult` (added by `000025_activity_difficulty`). Plans and goal picks take normal ones first; the "Osonroq / Odatdagi / Qiyinroq" switch swaps an activity for another of the chosen level |
 | `photo_id` | `UUID` | yes | | the activity's picture, references `media(id)` `ON DELETE SET NULL` (added by `000027_content_photos`); `NULL` means none |
+| `source` | `TEXT` | no | `'admin'` | where it comes from: `test`, `admin`, `harvard` or `ai` (`activities_source_chk`, added by `000028_content_source`). Rows that existed before `000028` are `test` |
 | `goal_ids` | `UUID[]` | no | `'{}'` | ids of the [`goals`](#goals) the activity serves; no foreign key, see below |
 | `min_age` | `SMALLINT` | no | | youngest suitable age, years |
 | `max_age` | `SMALLINT` | no | | oldest suitable age, years |
@@ -43,6 +44,7 @@ Constraints:
 - `activities_age_range_chk`: `min_age >= 2 AND max_age <= 6 AND min_age <= max_age`
 - `activities_duration_chk`: `duration_minutes > 0`
 - `activities_difficulty_chk`: `difficulty IN ('easy', 'normal', 'difficult')` (`000025`)
+- `activities_source_chk`: `source IN ('test', 'admin', 'harvard', 'ai')` (`000028`)
 
 Indexes:
 
@@ -397,6 +399,7 @@ Short texts for parents (the "Kun maqolasi" card and screen). Created by
 | `min_age`, `max_age` | `SMALLINT` | no | | `2 <= min_age <= max_age <= 6` (`articles_age_range_chk`) |
 | `goal_id` | `UUID` | no | | references `goals(id)`; goals are only soft-deleted, so the row stays |
 | `status` | `TEXT` | no | `'in_review'` | `published`, `in_review` or `unpublished` (`articles_status_chk`); only `published` reaches the app |
+| `source` | `TEXT` | no | `'admin'` | where it comes from: `test`, `admin`, `harvard` or `ai` (`articles_source_chk`, added by `000028_content_source`). Rows that existed before `000028` are `test` |
 | `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | soft delete |
 
@@ -452,6 +455,7 @@ setting `deleted_at`.
 | `suggestion_uz`, `suggestion_ru`, `suggestion_en` | `TEXT` | no | `''` | optional "Tavsiya" line |
 | `questions_uz`, `questions_ru`, `questions_en` | `TEXT` | no | `''` | optional questions to ask after watching, one per line |
 | `status` | `TEXT` | no | `'in_review'` | `published`, `in_review` or `unpublished` (`posts_status_chk`) |
+| `source` | `TEXT` | no | `'admin'` | where it comes from: `test`, `admin`, `harvard` or `ai` (`posts_source_chk`, added by `000028_content_source`). Rows that existed before `000028` are `test` |
 | `created_at`, `updated_at` | `TIMESTAMPTZ` | no | `NOW()` | |
 | `deleted_at` | `TIMESTAMPTZ` | yes | | soft delete |
 
@@ -594,6 +598,9 @@ something to show. Real content is made in the dashboard; edit or delete the sam
   `media` row with a `video/*` content type. With no uploaded video they are skipped; upload one
   in the dashboard and run the migration again by hand
   (`psql "$POSTGRES_URL" -f migrations/000024_sample_content.up.sql`), or make the videos there.
+- These samples are `source = 'test'` (set by `000028_content_source`). Rows added by running
+  `000024` by hand after `000028` get the column default `admin`; set them back with
+  `UPDATE posts SET source = 'test' WHERE id::text LIKE '5a3e0000-%'` (likewise for articles).
 
 ### Seed photos (`seeds/photos`)
 

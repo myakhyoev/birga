@@ -40,6 +40,7 @@ type dbArticle struct {
 	GoalID      string    `db:"goal_id"`
 	TopicID     *string   `db:"topic_id"`
 	Status      string    `db:"status"`
+	Source      string    `db:"source"`
 	CreatedAt   time.Time `db:"created_at"`
 	UpdatedAt   time.Time `db:"updated_at"`
 	IsRead      bool      `db:"is_read"`
@@ -49,7 +50,7 @@ type dbArticle struct {
 const articleColumns = `
 	a.id, a.title_uz, a.title_ru, a.title_en, a.article_body_uz, a.article_body_ru, a.article_body_en,
 	a.tip_uz, a.tip_ru, a.tip_en, a.photo_id, a.expected_read_time, a.min_age, a.max_age, a.goal_id,
-	a.topic_id, a.status, a.created_at, a.updated_at`
+	a.topic_id, a.status, a.source, a.created_at, a.updated_at`
 
 // readerJoin adds is_read for the user in parameter $n.
 func readerJoin(n int) (cols, join string) {
@@ -67,8 +68,8 @@ func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Arti
 	q := `
 		INSERT INTO articles AS a (
 			title_uz, title_ru, title_en, article_body_uz, article_body_ru, article_body_en,
-			tip_uz, tip_ru, tip_en, photo_id, expected_read_time, min_age, max_age, goal_id, status, topic_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			tip_uz, tip_ru, tip_en, photo_id, expected_read_time, min_age, max_age, goal_id, status, topic_id, source
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE(NULLIF($17, ''), 'admin'))
 		RETURNING ` + articleColumns + noReader
 
 	var photoID *string
@@ -78,7 +79,7 @@ func (r *articleRepo) Create(ctx context.Context, a domain.Article) (domain.Arti
 
 	return r.one(ctx, l, q,
 		a.TitleUz, a.TitleRu, a.TitleEn, a.BodyUz, a.BodyRu, a.BodyEn,
-		a.TipUz, a.TipRu, a.TipEn, photoID, a.ReadMinutes, a.MinAge, a.MaxAge, a.GoalID, a.Status, topicOrNull(a.TopicID),
+		a.TipUz, a.TipRu, a.TipEn, photoID, a.ReadMinutes, a.MinAge, a.MaxAge, a.GoalID, a.Status, topicOrNull(a.TopicID), a.Source,
 	)
 }
 
@@ -390,6 +391,10 @@ func articleWhere(f domain.ArticleFilter) (string, []any) {
 		add(func(n string) string { return "a.status = " + n }, f.Status)
 	}
 
+	if f.Source != "" {
+		add(func(n string) string { return "a.source = " + n }, f.Source)
+	}
+
 	if f.Search != "" {
 		add(func(n string) string {
 			return "(a.title_uz ILIKE " + n + " OR a.title_ru ILIKE " + n + " OR a.title_en ILIKE " + n + ")"
@@ -434,7 +439,7 @@ func articleSet(upd domain.ArticleUpdate) (string, []any) {
 		{"title_uz", upd.TitleUz}, {"title_ru", upd.TitleRu}, {"title_en", upd.TitleEn},
 		{"article_body_uz", upd.BodyUz}, {"article_body_ru", upd.BodyRu}, {"article_body_en", upd.BodyEn},
 		{"tip_uz", upd.TipUz}, {"tip_ru", upd.TipRu}, {"tip_en", upd.TipEn},
-		{"goal_id", upd.GoalID}, {"status", upd.Status},
+		{"goal_id", upd.GoalID}, {"status", upd.Status}, {"source", upd.Source},
 	} {
 		if f.value != nil {
 			add(f.column, *f.value)
@@ -480,6 +485,7 @@ func (a dbArticle) toDomain() domain.Article {
 		GoalID:      a.GoalID,
 		TopicID:     a.TopicID,
 		Status:      a.Status,
+		Source:      a.Source,
 		CreatedAt:   a.CreatedAt,
 		UpdatedAt:   a.UpdatedAt,
 		IsRead:      a.IsRead,
