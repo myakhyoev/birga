@@ -54,3 +54,11 @@ WHERE deleted_at IS NULL AND (
 	(harder_en = '' AND harder_uz <> ''))
 ORDER BY id" 2>&1 | mask
 echo "active activities: $(psql "$POSTGRES_URL" -tAc 'SELECT count(*) FROM activities WHERE deleted_at IS NULL')"
+
+echo "== all live activities (id | title_uz | has photo)"
+if psql "$POSTGRES_URL" -tAc "SELECT 1 FROM information_schema.columns WHERE table_name='activities' AND column_name='photo_id'" | grep -q 1; then
+	PHOTO="(photo_id IS NOT NULL)::text"
+else
+	PHOTO="'n/a'"
+fi
+psql "$POSTGRES_URL" -tA -F ' | ' -c "SELECT id, title_uz, $PHOTO FROM activities WHERE deleted_at IS NULL ORDER BY id" 2>&1 | mask
