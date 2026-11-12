@@ -53,6 +53,15 @@ func (uc *UseCase) Execute(ctx context.Context, p domain.Post) (domain.Post, err
 		p.Status = domain.ArticleStatusInReview
 	}
 
+	p.Source = domain.NormalizeSource(p.Source)
+	if p.Source == "" {
+		p.Source = domain.SourceAdmin
+	}
+
+	if !domain.ValidSource(p.Source) {
+		return domain.Post{}, errs.ErrUnknownSource
+	}
+
 	if err := validate(p); err != nil {
 		return domain.Post{}, err
 	}

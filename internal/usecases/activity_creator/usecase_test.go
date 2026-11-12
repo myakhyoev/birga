@@ -92,6 +92,15 @@ func TestExecute_Success(t *testing.T) {
 	if _, err := New(nil, repo, &fakeGoals{active: -1}).Execute(context.Background(), a); err != nil || repo.got.Difficulty != domain.DifficultyEasy {
 		t.Fatalf("difficulty easy: %q %v", repo.got.Difficulty, err)
 	}
+
+	if repo.got.Source != domain.SourceAdmin {
+		t.Fatalf("source should default to admin, got %q", repo.got.Source)
+	}
+
+	a.Source = " Harvard "
+	if _, err := New(nil, repo, &fakeGoals{active: -1}).Execute(context.Background(), a); err != nil || repo.got.Source != domain.SourceHarvard {
+		t.Fatalf("source harvard: %q %v", repo.got.Source, err)
+	}
 }
 
 func TestExecute_UnknownGoal(t *testing.T) {
@@ -121,6 +130,7 @@ func TestExecute_Validation(t *testing.T) {
 		"zero duration":    func(a *domain.Activity) { a.DurationMinutes = 0 },
 		"too long session": func(a *domain.Activity) { a.DurationMinutes = 61 },
 		"bad difficulty":   func(a *domain.Activity) { a.Difficulty = "hard" },
+		"bad source":       func(a *domain.Activity) { a.Source = "blog" },
 	}
 
 	for name, mutate := range cases {

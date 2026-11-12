@@ -46,14 +46,17 @@ func TestPostRepo_CRUDAndList(t *testing.T) {
 		p.QuestionsUz = "Bir?\nIkki?"
 
 		created, err := s.Post().Create(ctx, p)
-		if err != nil || created.Duration != 4.2 || created.QuestionsUz != "Bir?\nIkki?" || created.SuggestionEn != "" {
+		if err != nil || created.Duration != 4.2 || created.QuestionsUz != "Bir?\nIkki?" || created.SuggestionEn != "" ||
+			created.Source != domain.SourceAdmin {
 			t.Fatalf("Create: %+v, %v", created, err)
 		}
 
 		upd, err := s.Post().Update(ctx, created.ID, domain.PostUpdate{
 			Duration: func() *float64 { d := 3.67; return &d }(), Status: strPtr(domain.ArticleStatusPublished),
+			Source: strPtr(domain.SourceHarvard),
 		})
-		if err != nil || upd.Duration != 3.67 || upd.Status != "published" || upd.TitleUz != "Video" {
+		if err != nil || upd.Duration != 3.67 || upd.Status != "published" || upd.TitleUz != "Video" ||
+			upd.Source != domain.SourceHarvard {
 			t.Fatalf("Update: %+v, %v", upd, err)
 		}
 
@@ -68,6 +71,8 @@ func TestPostRepo_CRUDAndList(t *testing.T) {
 			"all":       {domain.PostFilter{Limit: 10}, 2},
 			"age 6":     {domain.PostFilter{Age: 6, Limit: 10}, 1},
 			"published": {domain.PostFilter{Status: "published", Search: "vid", Limit: 10}, 2},
+			"harvard":   {domain.PostFilter{Source: domain.SourceHarvard, Limit: 10}, 1},
+			"ai":        {domain.PostFilter{Source: domain.SourceAI, Limit: 10}, 0},
 		} {
 			if _, total, err := s.Post().List(ctx, tc.f); err != nil || total != tc.total {
 				t.Fatalf("%s: total=%d err=%v, want %d", name, total, err, tc.total)

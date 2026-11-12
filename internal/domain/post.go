@@ -33,6 +33,8 @@ type Post struct {
 	QuestionsRu  string
 	QuestionsEn  string
 	Status       string
+	// Source is where the video comes from: SourceTest, SourceAdmin, SourceHarvard or SourceAI.
+	Source string
 	// Locked is set on app lists for a free-plan user: the post was never their daily video.
 	Locked    bool
 	CreatedAt time.Time
@@ -61,6 +63,7 @@ type PostUpdate struct {
 	QuestionsRu  *string
 	QuestionsEn  *string
 	Status       *string
+	Source       *string
 }
 
 // IsEmpty reports whether the update changes nothing.
@@ -68,7 +71,7 @@ func (u PostUpdate) IsEmpty() bool {
 	return u.TitleUz == nil && u.TitleRu == nil && u.TitleEn == nil && u.VideoID == nil && u.PhotoID == nil && u.GoalID == nil && u.TopicID == nil &&
 		u.MinAge == nil && u.MaxAge == nil && u.Duration == nil && u.SuggestionUz == nil &&
 		u.SuggestionRu == nil && u.SuggestionEn == nil && u.QuestionsUz == nil && u.QuestionsRu == nil &&
-		u.QuestionsEn == nil && u.Status == nil
+		u.QuestionsEn == nil && u.Status == nil && u.Source == nil
 }
 
 // PostFilter narrows a post listing. Zero values mean "no filter".
@@ -80,6 +83,8 @@ type PostFilter struct {
 	Search string
 	// Status is one of the article statuses; empty lists all.
 	Status string
+	// Source keeps content of this source; empty lists all.
+	Source string
 	// MaxMinutes keeps videos of at most this many minutes.
 	MaxMinutes float64
 	// LockFor, when set, marks the posts that were never this user's daily video as Locked.

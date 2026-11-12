@@ -362,6 +362,18 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "test",
+                            "admin",
+                            "harvard",
+                            "ai"
+                        ],
+                        "type": "string",
+                        "description": "only activities of this source",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "page size (default 20, max 100)",
                         "name": "limit",
@@ -425,7 +437,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6\n- main_idea_uz/ru/en are optional (the \"Katta g'oya\" box); empty hides the box in the app\n- difficulty is easy, normal or difficult (default normal); plans pick normal ones first\n- photo_id is an optional picture, an id from POST /v1/media or /v1/admin/media (422 if unknown)",
+                "description": "- title/description are required in both Uzbek (uz) and Russian (ru)\n- goal_ids lists 1 to 5 goals the activity serves, ids from GET /v1/goals; each must be an\nactive goal (422), repeats are stored once\n- min_age/max_age are child ages in years, within 2..6\n- main_idea_uz/ru/en are optional (the \"Katta g'oya\" box); empty hides the box in the app\n- difficulty is easy, normal or difficult (default normal); plans pick normal ones first\n- source is where the activity comes from: test, admin, harvard or ai (default admin)\n- photo_id is an optional picture, an id from POST /v1/media or /v1/admin/media (422 if unknown)",
                 "consumes": [
                     "application/json"
                 ],
@@ -737,6 +749,18 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "test",
+                            "admin",
+                            "harvard",
+                            "ai"
+                        ],
+                        "type": "string",
+                        "description": "only content of this source",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "description": "goal id (UUID) from GET /v1/goals",
                         "name": "goal_id",
@@ -824,7 +848,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title and article_body are required in Uzbek, Russian and English; tip_* is optional (\"\" = no tip box)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app",
+                "description": "- title and article_body are required in Uzbek, Russian and English; tip_* is optional (\"\" = no tip box)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- photo_id is an optional id from POST /v1/media (422 if unknown)\n- expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app\n- source is where it comes from: test, admin, harvard or ai; omitted means admin",
                 "consumes": [
                     "application/json"
                 ],
@@ -1862,6 +1886,18 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "test",
+                            "admin",
+                            "harvard",
+                            "ai"
+                        ],
+                        "type": "string",
+                        "description": "only content of this source",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "description": "goal id (UUID) from GET /v1/goals",
                         "name": "goal_id",
@@ -1949,7 +1985,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- photo_id is an optional cover picture, an image uploaded with POST /v1/admin/media (422 if unknown)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app",
+                "description": "- title is required in Uzbek, Russian and English; suggestion_* (\"Tavsiya\" line) and\nquestions_* (\"ask after watching\" box, one question per line) are optional, \"\" hides them\n- video_id is an MP4 or WebM video uploaded with POST /v1/admin/media (422 otherwise)\n- photo_id is an optional cover picture, an image uploaded with POST /v1/admin/media (422 if unknown)\n- goal_id is one active goal from GET /v1/goals (422 if unknown)\n- topic_id is an optional topic from GET /v1/topics, shown as the tag instead of the goal (422 if unknown)\n- duration is in minutes, a decimal (4.2 = 4:12), more than 0 and at most 600\n- min_age/max_age are child ages within 2..6\n- status is published, in_review or unpublished; omitted means in_review. Only published posts reach the app\n- source is where it comes from: test, admin, harvard or ai; omitted means admin",
                 "consumes": [
                     "application/json"
                 ],
@@ -6899,6 +6935,16 @@ const docTemplate = `{
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "admin"
+                },
                 "title_en": {
                     "type": "string",
                     "example": "Colourful stones"
@@ -6954,6 +7000,16 @@ const docTemplate = `{
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "admin"
                 },
                 "status": {
                     "type": "string",
@@ -7093,6 +7149,16 @@ const docTemplate = `{
                 "questions_uz": {
                     "type": "string",
                     "example": "«Qaysi rang senga eng ko‘p yoqdi?»\n«Uyimizda qizil rangli nima bor?»"
+                },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "admin"
                 },
                 "status": {
                     "type": "string",
@@ -7724,6 +7790,16 @@ const docTemplate = `{
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "harvard"
+                },
                 "title_en": {
                     "type": "string",
                     "example": "Colourful stones"
@@ -7776,6 +7852,16 @@ const docTemplate = `{
                     "description": "PhotoID \"\" removes the photo.",
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "harvard"
                 },
                 "status": {
                     "type": "string",
@@ -7908,6 +7994,16 @@ const docTemplate = `{
                 },
                 "questions_uz": {
                     "type": "string"
+                },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "harvard"
                 },
                 "status": {
                     "type": "string",
@@ -8194,6 +8290,17 @@ const docTemplate = `{
                     "type": "string",
                     "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
+                "source": {
+                    "description": "Source is where the activity comes from: test, admin, harvard or ai.",
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "admin"
+                },
                 "title_en": {
                     "type": "string",
                     "example": "Colourful stones"
@@ -8303,6 +8410,16 @@ const docTemplate = `{
                     "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
                     "type": "string",
                     "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "admin"
                 },
                 "status": {
                     "type": "string",
@@ -9275,6 +9392,16 @@ const docTemplate = `{
                 "questions_uz": {
                     "type": "string"
                 },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "admin"
+                },
                 "status": {
                     "type": "string",
                     "enum": [
@@ -9821,6 +9948,16 @@ const docTemplate = `{
                     "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
                     "type": "string",
                     "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "source": {
+                    "type": "string",
+                    "enum": [
+                        "test",
+                        "admin",
+                        "harvard",
+                        "ai"
+                    ],
+                    "example": "admin"
                 },
                 "status": {
                     "type": "string",

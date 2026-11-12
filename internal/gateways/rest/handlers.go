@@ -69,6 +69,7 @@ type CreateActivityRequest struct {
 	HarderRu        string   `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
 	HarderEn        string   `json:"harder_en" example:"Also sort the stones by size"`
 	Difficulty      string   `json:"difficulty" example:"normal" enums:"easy,normal,difficult"`
+	Source          string   `json:"source" example:"admin" enums:"test,admin,harvard,ai"`
 	PhotoID         *string  `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int      `json:"min_age" example:"3" minimum:"2" maximum:"6"`
@@ -85,6 +86,7 @@ type CreateActivityRequest struct {
 // @Description - min_age/max_age are child ages in years, within 2..6
 // @Description - main_idea_uz/ru/en are optional (the "Katta g'oya" box); empty hides the box in the app
 // @Description - difficulty is easy, normal or difficult (default normal); plans pick normal ones first
+// @Description - source is where the activity comes from: test, admin, harvard or ai (default admin)
 // @Description - photo_id is an optional picture, an id from POST /v1/media or /v1/admin/media (422 if unknown)
 // @Tags admin
 // @Security AdminKey
@@ -123,6 +125,7 @@ func (s *Server) CreateActivity() gin.HandlerFunc {
 			HarderRu:        req.HarderRu,
 			HarderEn:        req.HarderEn,
 			Difficulty:      req.Difficulty,
+			Source:          req.Source,
 			PhotoID:         req.PhotoID,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
@@ -169,6 +172,7 @@ func (s *Server) ListActivities() gin.HandlerFunc {
 // @Param q query string false "text the Uzbek or Russian title contains, ignoring case (at most 100 characters)"
 // @Param difficulty query string false "only activities of this level" Enums(easy, normal, difficult)
 // @Param status query string false "published or draft; omitted lists both" Enums(published, draft)
+// @Param source query string false "only activities of this source" Enums(test, admin, harvard, ai)
 // @Param limit query int false "page size (default 20, max 100)"
 // @Param offset query int false "offset"
 // @Success 200 {object} rest.R{data=rest.activityListView}
@@ -216,6 +220,7 @@ func (s *Server) listActivities(publishedOnly bool) gin.HandlerFunc {
 		}
 		if !publishedOnly {
 			f.Status = c.Query("status")
+			f.Source = c.Query("source")
 		}
 
 		items, total, err := s.activityLister.Execute(c.Request.Context(), f)
@@ -303,6 +308,7 @@ type UpdateActivityRequest struct {
 	HarderRu      *string `json:"harder_ru" example:"Сортируйте камни ещё и по размеру"`
 	HarderEn      *string `json:"harder_en" example:"Also sort the stones by size"`
 	Difficulty    *string `json:"difficulty" example:"easy" enums:"easy,normal,difficult"`
+	Source        *string `json:"source" example:"harvard" enums:"test,admin,harvard,ai"`
 	// PhotoID "" removes the picture.
 	PhotoID         *string  `json:"photo_id" example:"3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"`
 	GoalIDs         []string `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
@@ -365,6 +371,7 @@ func (s *Server) UpdateActivity() gin.HandlerFunc {
 			HarderRu:        req.HarderRu,
 			HarderEn:        req.HarderEn,
 			Difficulty:      req.Difficulty,
+			Source:          req.Source,
 			PhotoID:         req.PhotoID,
 			GoalIDs:         req.GoalIDs,
 			MinAge:          req.MinAge,
@@ -427,6 +434,8 @@ type activityView struct {
 	HarderRu      string `json:"harder_ru"`
 	HarderEn      string `json:"harder_en"`
 	Difficulty    string `json:"difficulty" example:"normal" enums:"easy,normal,difficult"`
+	// Source is where the activity comes from: test, admin, harvard or ai.
+	Source string `json:"source" example:"admin" enums:"test,admin,harvard,ai"`
 	// PhotoID is the activity's picture, a media id; null without one.
 	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	// PhotoURL is where to load the picture from (GET, no token); null without one.
@@ -466,6 +475,7 @@ func toActivityView(a domain.Activity) activityView {
 		HarderRu:        a.HarderRu,
 		HarderEn:        a.HarderEn,
 		Difficulty:      a.Difficulty,
+		Source:          a.Source,
 		PhotoID:         a.PhotoID,
 		PhotoURL:        photoURL(a.PhotoID),
 		GoalIDs:         a.GoalIDs,

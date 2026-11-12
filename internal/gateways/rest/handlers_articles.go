@@ -29,6 +29,7 @@ type CreateArticleRequest struct {
 	// TopicID is the optional topic tag from GET /v1/topics; null means none.
 	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	Status  string  `json:"status" example:"in_review" enums:"published,in_review,unpublished"`
+	Source  string  `json:"source" example:"admin" enums:"test,admin,harvard,ai"`
 }
 
 // CreateArticle godoc swagger
@@ -39,6 +40,7 @@ type CreateArticleRequest struct {
 // @Description - photo_id is an optional id from POST /v1/media (422 if unknown)
 // @Description - expected_read_time is in minutes (1..60); min_age/max_age are child ages within 2..6
 // @Description - status is published, in_review or unpublished; omitted means in_review. Only published articles reach the app
+// @Description - source is where it comes from: test, admin, harvard or ai; omitted means admin
 // @Tags admin
 // @Security AdminKey
 // @Accept json
@@ -76,6 +78,7 @@ func (s *Server) CreateArticle() gin.HandlerFunc {
 			GoalID:      req.GoalID,
 			TopicID:     req.TopicID,
 			Status:      req.Status,
+			Source:      req.Source,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -94,6 +97,7 @@ func (s *Server) CreateArticle() gin.HandlerFunc {
 // @Produce json
 // @Param q query string false "text the title (any language) contains, ignoring case (at most 100 characters)"
 // @Param status query string false "published, in_review or unpublished; omitted lists all" Enums(published, in_review, unpublished)
+// @Param source query string false "only content of this source" Enums(test, admin, harvard, ai)
 // @Param goal_id query string false "goal id (UUID) from GET /v1/goals"
 // @Param topic_id query string false "topic id (UUID) from GET /v1/topics"
 // @Param age query int false "child age in years (2..6)"
@@ -114,6 +118,7 @@ func (s *Server) AdminListArticles() gin.HandlerFunc {
 		}
 
 		f.Status = c.Query("status")
+		f.Source = c.Query("source")
 
 		items, total, err := s.articleLister.Execute(c.Request.Context(), f)
 		if err != nil {
@@ -184,6 +189,7 @@ type UpdateArticleRequest struct {
 	// TopicID "" removes the topic; omitted or null keeps it.
 	TopicID *string `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	Status  *string `json:"status" example:"published" enums:"published,in_review,unpublished"`
+	Source  *string `json:"source" example:"harvard" enums:"test,admin,harvard,ai"`
 }
 
 // UpdateArticle godoc swagger
@@ -238,6 +244,7 @@ func (s *Server) UpdateArticle() gin.HandlerFunc {
 			GoalID:      req.GoalID,
 			TopicID:     req.TopicID,
 			Status:      req.Status,
+			Source:      req.Source,
 		})
 		if err != nil {
 			Return(c, nil, err)
@@ -515,6 +522,7 @@ type articleView struct {
 	// TopicID is the optional topic tag from GET /v1/topics; null means none.
 	TopicID   *string   `json:"topic_id" example:"9a1c7e52-3b4d-4f6a-8e2b-7c5d1f0a9b3e"`
 	Status    string    `json:"status" example:"published" enums:"published,in_review,unpublished"`
+	Source    string    `json:"source" example:"admin" enums:"test,admin,harvard,ai"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -591,6 +599,7 @@ func toArticleView(a domain.Article) articleView {
 		GoalID:           a.GoalID,
 		TopicID:          a.TopicID,
 		Status:           a.Status,
+		Source:           a.Source,
 		CreatedAt:        a.CreatedAt,
 		UpdatedAt:        a.UpdatedAt,
 	}
