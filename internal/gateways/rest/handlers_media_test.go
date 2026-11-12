@@ -21,23 +21,60 @@ const testMaxSize = 1024
 type fakeMedia struct {
 	got        []byte
 	allowVideo bool
+	kind       domain.MediaKind
+	crop       *domain.MediaCrop
+	recropID   string
 	err        error
 }
 
 func (f *fakeMedia) Execute(_ context.Context, up domain.MediaUpload) (domain.Media, error) {
-	f.got, f.allowVideo = up.Data, up.AllowVideo
+	f.got, f.allowVideo, f.kind, f.crop = up.Data, up.AllowVideo, up.Kind, up.Crop
 
 	return domain.Media{ID: testID, URL: "https://cdn.test/media/" + testID + ".png", ContentType: "image/png", Size: int64(len(up.Data))}, f.err
 }
 
 func (f *fakeMedia) MaxSize() int64 { return testMaxSize }
 
-func (f *fakeMedia) Link(_ context.Context, id string) (string, error) {
+func (f *fakeMedia) Recrop(_ context.Context, id string, kind domain.MediaKind, crop *domain.MediaCrop) (domain.Media, error) {
+	f.recropID, f.kind, f.crop = id, kind, crop
+
+	return domain.Media{ID: testID, ContentType: "image/jpeg", Size: 10, Kind: kind, VariantsStatus: domain.VariantsPending}, f.err
+}
+
+// Link serves the thumb as made, and every other size from the original.
+func (f *fakeMedia) Link(_ context.Context, id, size string) (string, string, error) {
 	if id != testID {
-		return "", errs.ErrMediaNotFound
+		return "", "", errs.ErrMediaNotFound
 	}
 
-	return "https://signed.test/" + id, nil
+	if size == domain.MediaSizeThumb {
+		return "https://signed.test/" + id + "/thumb.jpg", size, nil
+	}
+
+	return "https://signed.test/" + id, domain.MediaSizeOriginal, nil
+}
+
+func TestGetMedia_Size(t *testing.T) {
+	s, _ := newTestServer("")
+
+	for _, tt := range []struct{ size, location, served string }{
+		{"thumb", "https://signed.test/" + testID + "/thumb.jpg", "thumb"},
+		{"main", "https://signed.test/" + testID, "original"}, // not made yet: the original
+	} {
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/media/"+testID+"?size="+tt.size, nil))
+
+		if w.Code != http.StatusFound || w.Header().Get("Location") != tt.location || w.Header().Get("X-Media-Variant") != tt.served {
+			t.Fatalf("size %s: code %d location %q served %q", tt.size, w.Code, w.Header().Get("Location"), w.Header().Get("X-Media-Variant"))
+		}
+	}
+
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/media/"+testID+"?size=huge", nil))
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("bad size: %d", w.Code)
+	}
 }
 
 func TestGetMedia(t *testing.T) {
@@ -196,5 +233,84 @@ func TestAdminUploadMedia_AllowsVideo(t *testing.T) {
 
 	if code, _ := doRaw(t, s, ct, b); code != http.StatusOK || d.media.allowVideo {
 		t.Fatalf("public upload must stay images only: %d allowVideo=%v", code, d.media.allowVideo)
+	}
+}
+
+func TestUploadMedia_KindAndCrop(t *testing.T) {
+	photo := []byte("\x89PNG\x0D\x0A\x1A\x0A photo bytes")
+	b64 := base64.StdEncoding.EncodeToString(photo)
+
+	upload := func(s http.Handler, path string, v url.Values) (int, R) {
+		v.Set("file", b64)
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader([]byte(v.Encode())))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set(adminKeyHeader, testAdminKey)
+
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, req)
+
+		var r R
+		_ = json.Unmarshal(w.Body.Bytes(), &r)
+
+		return w.Code, r
+	}
+
+	s, d := newTestServer(testAdminKey)
+
+	// Defaults: the app uploads profile photos, the dashboard content pictures.
+	if code, r := upload(s, "/v1/media", url.Values{}); code != http.StatusOK || d.media.kind != domain.MediaKindProfile || d.media.crop != nil {
+		t.Fatalf("app default: %d %+v kind %q", code, r, d.media.kind)
+	}
+
+	if code, r := upload(s, "/v1/admin/media", url.Values{}); code != http.StatusOK || d.media.kind != domain.MediaKindContent {
+		t.Fatalf("admin default: %d %+v kind %q", code, r, d.media.kind)
+	}
+
+	code, r := upload(s, "/v1/admin/media", url.Values{"kind": {"profile"}, "crop": {"0.1, 0.2, 0.5, 0.5"}})
+	if code != http.StatusOK || d.media.kind != domain.MediaKindProfile || d.media.crop == nil || *d.media.crop != (domain.MediaCrop{X: 0.1, Y: 0.2, W: 0.5, H: 0.5}) {
+		t.Fatalf("kind and crop: %d %+v kind %q crop %+v", code, r, d.media.kind, d.media.crop)
+	}
+
+	for _, bad := range []url.Values{
+		{"kind": {"banner"}},
+		{"crop": {"0,0,1"}},
+		{"crop": {"0.5,0,0.8,1"}},
+		{"crop": {"a,b,c,d"}},
+	} {
+		if code, r := upload(s, "/v1/admin/media", bad); code != http.StatusUnprocessableEntity {
+			t.Errorf("%v: %d %+v", bad, code, r)
+		}
+	}
+}
+
+func TestAdminRecropMedia(t *testing.T) {
+	s, d := newTestServer(testAdminKey)
+
+	recrop := func(body string) (int, R) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/media/"+testID+"/recrop", bytes.NewReader([]byte(body)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(adminKeyHeader, testAdminKey)
+
+		w := httptest.NewRecorder()
+		s.ServeHTTP(w, req)
+
+		var r R
+		_ = json.Unmarshal(w.Body.Bytes(), &r)
+
+		return w.Code, r
+	}
+
+	code, r := recrop(`{"kind":"content","crop":{"x":0,"y":0.1,"w":1,"h":0.5}}`)
+	if code != http.StatusOK || d.media.recropID != testID || d.media.crop == nil || d.media.crop.H != 0.5 {
+		t.Fatalf("recrop: %d %+v %+v", code, r, d.media.crop)
+	}
+
+	data, _ := r.Data.(map[string]any)
+	if data["variants_status"] != "pending" || data["kind"] != "content" {
+		t.Fatalf("view: %+v", data)
+	}
+
+	if code, _ := recrop(`{"kind":"square"}`); code != http.StatusUnprocessableEntity {
+		t.Fatalf("bad kind: %d", code)
 	}
 }

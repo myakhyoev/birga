@@ -320,13 +320,14 @@ type otpVerifier interface {
 	Execute(ctx context.Context, req domain.OTPVerifyRequest) error
 }
 
-// mediaLinker gives a short-lived link to an uploaded file.
+// mediaLinker gives a short-lived link to an uploaded file or one of its sizes.
 type mediaLinker interface {
-	Link(ctx context.Context, id string) (string, error)
+	Link(ctx context.Context, id, size string) (link, served string, err error)
 }
 
 type mediaUploader interface {
 	Execute(ctx context.Context, up domain.MediaUpload) (domain.Media, error)
+	Recrop(ctx context.Context, id string, kind domain.MediaKind, crop *domain.MediaCrop) (domain.Media, error)
 	MaxSize() int64
 	mediaLinker
 }

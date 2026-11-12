@@ -86,7 +86,7 @@ func (uc *UseCase) Execute(ctx context.Context, dir string) (Result, error) {
 			return res, errs.Errf(errs.ErrInternal, "read %s: %s", p.File, err.Error())
 		}
 
-		m, err := uc.uploader.Execute(ctx, domain.MediaUpload{Data: data})
+		m, err := uc.uploader.Execute(ctx, domain.MediaUpload{Data: data, Kind: domain.MediaKindContent})
 		if err != nil {
 			return res, err
 		}

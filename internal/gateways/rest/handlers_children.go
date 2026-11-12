@@ -451,7 +451,9 @@ type childView struct {
 	Gender  string  `json:"gender" example:"male"`
 	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	// PhotoURL is where the app loads the photo from (GET, no token); null without a photo.
-	PhotoURL  *string   `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	PhotoURL *string `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	// photo_main_url, photo_thumb_url, photo_small_url: the sizes of the photo (GET /v1/media/{id}?size=).
+	photoURLs
 	GoalIDs   []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -466,6 +468,7 @@ func toChildView(c domain.Child) childView {
 		Gender:    c.Gender,
 		PhotoID:   c.PhotoID,
 		PhotoURL:  photoURL(c.PhotoID),
+		photoURLs: newPhotoURLs(c.PhotoID),
 		GoalIDs:   c.GoalIDs,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,

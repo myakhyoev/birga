@@ -45,6 +45,7 @@ import (
 	goallister "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_lister"
 	goalupdater "gitlab.com/loyihalar/birga/backend/internal/usecases/goal_updater"
 	mediauploader "gitlab.com/loyihalar/birga/backend/internal/usecases/media_uploader"
+	mediavariants "gitlab.com/loyihalar/birga/backend/internal/usecases/media_variants"
 	milestonemanager "gitlab.com/loyihalar/birga/backend/internal/usecases/milestone_manager"
 	otpsender "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_sender"
 	otpverifier "gitlab.com/loyihalar/birga/backend/internal/usecases/otp_verifier"
@@ -305,12 +306,20 @@ type useCases struct {
 
 	// mediaUploader is nil when media uploads are disabled.
 	mediaUploader *mediauploader.UseCase
+	// mediaVariants makes the photo sizes in the background; nil when media uploads are disabled.
+	mediaVariants *mediavariants.UseCase
 }
 
 func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore, cache *redisstore.Store, drv *drivers) *useCases {
-	var mediaUploader *mediauploader.UseCase
+	var (
+		mediaUploader *mediauploader.UseCase
+		mediaVariants *mediavariants.UseCase
+	)
+
 	if drv.s3 != nil {
 		mediaUploader = mediauploader.New(l.Named("usecase.media_uploader"), store.Media(), drv.s3, cfg.Media.MaxSize, cfg.S3.KeyPrefix, cfg.Media.LinkTTL)
+		mediaVariants = mediavariants.New(l.Named("usecase.media_variants"), store.Media(), drv.s3, cfg.S3.KeyPrefix)
+		mediaUploader.OnUpload(mediaVariants.Wake)
 	}
 
 	jwt, err := tokens.New(*cfg.JWT)
@@ -392,6 +401,7 @@ func buildUseCases(l *zap.Logger, cfg config.Application, store *dbstore.DBStore
 			cache.OTP(), store.User(), store.Auth(), jwt),
 
 		mediaUploader: mediaUploader,
+		mediaVariants: mediaVariants,
 	}
 }
 
@@ -399,8 +409,9 @@ func initREST(l *zap.Logger, cfg config.Application, health pinger, ucs *useCase
 	// A nil *UseCase inside a non-nil interface would look enabled to the server, so pass a true nil.
 	var media interface {
 		Execute(ctx context.Context, up domain.MediaUpload) (domain.Media, error)
+		Recrop(ctx context.Context, id string, kind domain.MediaKind, crop *domain.MediaCrop) (domain.Media, error)
 		MaxSize() int64
-		Link(ctx context.Context, id string) (string, error)
+		Link(ctx context.Context, id, size string) (link, served string, err error)
 	}
 	if ucs.mediaUploader != nil {
 		media = ucs.mediaUploader

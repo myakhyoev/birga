@@ -439,7 +439,9 @@ type activityView struct {
 	// PhotoID is the activity's picture, a media id; null without one.
 	PhotoID *string `json:"photo_id" example:"5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
 	// PhotoURL is where to load the picture from (GET, no token); null without one.
-	PhotoURL        *string   `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	PhotoURL *string `json:"photo_url" example:"/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"`
+	// photo_main_url, photo_thumb_url, photo_small_url: the sizes of the photo (GET /v1/media/{id}?size=).
+	photoURLs
 	GoalIDs         []string  `json:"goal_ids" example:"2b6f0cc9-0f3e-4b1a-9a7e-5d8c3e2f1a00"`
 	MinAge          int       `json:"min_age" example:"3"`
 	MaxAge          int       `json:"max_age" example:"5"`
@@ -478,6 +480,7 @@ func toActivityView(a domain.Activity) activityView {
 		Source:          a.Source,
 		PhotoID:         a.PhotoID,
 		PhotoURL:        photoURL(a.PhotoID),
+		photoURLs:       newPhotoURLs(a.PhotoID),
 		GoalIDs:         a.GoalIDs,
 		MinAge:          a.MinAge,
 		MaxAge:          a.MaxAge,

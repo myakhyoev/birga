@@ -120,4 +120,7 @@ type MediaConfig struct {
 	MaxSize int64 `env:"MAX_SIZE, default=104857600"`
 	// LinkTTL is how long a signed link from GET /v1/media/{id} works.
 	LinkTTL time.Duration `env:"LINK_TTL, default=1h"`
+	// VariantsInterval is how often the photo variant worker looks for photos still without their
+	// sizes; it is also woken right after every upload, so this is only the fallback.
+	VariantsInterval time.Duration `env:"VARIANTS_INTERVAL, default=1m"`
 }

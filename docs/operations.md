@@ -77,7 +77,7 @@ Workflows in `.github/workflows/`:
 |---|---|---|
 | `ci.yml` | every pull request and push to `main` | golangci-lint (non-blocking: v2.12.2 cannot analyse Go 1.27 yet); tests against PostgreSQL 17 after migrations |
 | `ci.yml`, job `deploy` | push to `main` after tests pass (or run by hand on `main`) | builds the binary for the server's CPU, uploads it with `migrations/` and `seeds/`, then runs `deploy/server/release.sh`: migrate up, load `seeds/activities.sql` if `activities` is empty, attach the [seed photos](#seed-photos) (`birga_backend seed-photos seeds/photos`; a failure is logged and does not stop the release), swap the binary, restart, check `/health`, roll back to the previous binary if the check fails |
-| `server-diagnostics.yml` | by hand (inputs: text to search, how far back) | runs `deploy/server/diagnostics.sh`: service states, which backend settings are set (values hidden), nginx upload limits, matching API and nginx log lines with phone numbers, IPs and device ids masked, and the activities that have Uzbek text but an empty English field (id, `title_uz`, which fields); safe for this public repository's logs |
+| `server-diagnostics.yml` | by hand (inputs: text to search, how far back) | runs `deploy/server/diagnostics.sh`: service states, which backend settings are set (values hidden), nginx upload limits, matching API and nginx log lines with phone numbers, IPs and device ids masked, and the activities that have Uzbek text but an empty English field (id, `title_uz`, which fields), and the photo size worker state per kind (`variants_status` counts, last failures); safe for this public repository's logs |
 | `fetch-photos.yml` | push to any branch except `main` that changes `seeds/photos/sources.tsv` (or this workflow or its script) | runs `deploy/ci/fetch-photos.sh`: downloads every listed photo whose JPEG is missing, resizes it to at most 1200 px (JPEG, quality 82) and commits the files back to the branch. See [Seed photos](#seed-photos) |
 | `server-setup.yml` | by hand (Actions tab, inputs: API domain, dashboard domain, certificate e-mail) | uploads `deploy/server/` and runs `bootstrap.sh` |
 
@@ -115,6 +115,8 @@ photos", `LU3cVmnWzBZXRVqtjXn10i`, 2026-11-11).
   the JPEG to S3 as a new `media` row and sets `photo_id`. Content with a picture (seeded before
   or set by an admin) is skipped, so it adds nothing on later deploys. Without S3 it prints
   `seed photos skipped` and does nothing.
+- Seeded pictures are uploaded as `kind=content`, so the [photo size worker](architecture.md#photo-variants)
+  makes their sizes (centre frame) right after; an admin can pick another frame in the dashboard.
 - To replace a seeded picture, upload another one in the dashboard.
 
 ## Images
@@ -194,7 +196,12 @@ service there (no persistence or backups needed) before deploying this version.
 [The Birga AWS setup](setup.md#the-birga-aws-setup) for the bucket `birga-staging` in
 `ap-southeast-2` and the backend's IAM user). Set the same `S3_*` values in the server's
 environment before deploying. Without
-it, uploads answer 503 and the rest of the API works. S3 calls show up in
+it, uploads answer 503 and the rest of the API works. The photo size worker runs inside the API
+and needs `s3:GetObject` (to read originals) and `s3:PutObject` (to write `media/<id>/<size>.jpg`);
+the `birga-backend-media` policy already allows both. After deploying `000029_media_variants`
+the worker makes the sizes of every photo already in use within a minute or two (one at a time).
+The server diagnostics workflow prints the count per `kind` and `variants_status` and the last
+failures (`variants_error`); logs say `photo variants made` / `photo variants failed`. S3 calls show up in
 `birga_http_client_request_duration_seconds{service="s3"}`. Turn on bucket versioning or
 a lifecycle rule if old photos should be kept or expired; the API never deletes a photo
 that a media row points to.

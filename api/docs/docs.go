@@ -1392,7 +1392,7 @@ const docTemplate = `{
                         "AdminKey": []
                     }
                 ],
-                "description": "- same form and limits as POST /v1/media; also accepts MP4 and WebM videos, detected from the bytes\n- the answer's id goes into posts.video_id; GET /v1/media/{id} redirects to the file, video players follow it",
+                "description": "- same form and limits as POST /v1/media; also accepts MP4 and WebM videos, detected from the bytes\n- the answer's id goes into posts.video_id; GET /v1/media/{id} redirects to the file, video players follow it\n- \"kind\" defaults to content here (activity and article pictures, video covers); send\nkind=profile for a user's photo. Videos get no sizes, kind and crop are ignored for them",
                 "consumes": [
                     "multipart/form-data",
                     "application/x-www-form-urlencoded"
@@ -1411,6 +1411,22 @@ const docTemplate = `{
                         "name": "file",
                         "in": "formData",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "profile",
+                            "content"
+                        ],
+                        "type": "string",
+                        "description": "content (default) or profile",
+                        "name": "kind",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "chosen frame x,y,w,h in fractions of the photo, e.g. 0,0.1,1,0.8",
+                        "name": "crop",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -1442,6 +1458,100 @@ const docTemplate = `{
                         "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnprocessableContentResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/rest.InternalServerErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/rest.ServiceUnavailableResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/media/{id}/recrop": {
+            "post": {
+                "security": [
+                    {
+                        "AdminKey": []
+                    }
+                ],
+                "description": "- takes the original of photo {id} and stores it again as a new media row with this kind\nand frame; the sizes are made in the background like after an upload\n- media ids never change their picture (apps keep photos by id), so put the new id into\nthe activity, article, video cover or user (photo_id) to show the new frame\n- crop is {\"x\",\"y\",\"w\",\"h\"} in fractions (0-1) of the upright photo; null means the centre\n- a video: 422; unknown id: 404",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "makes a copy of a photo with another frame",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "media id of the photo",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "kind and frame",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/rest.RecropMediaRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/rest.R"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/rest.mediaView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/rest.UnauthorizedResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/rest.NotFoundResponse"
                         }
                     },
                     "422": {
@@ -5957,7 +6067,7 @@ const docTemplate = `{
         },
         "/v1/media": {
             "post": {
-                "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from: GET /v1/media/{id} on this API\n- 503 when S3 is not configured (S3_BUCKET empty)",
+                "description": "- send form data (multipart/form-data or application/x-www-form-urlencoded) with one field \"file\":\neither the file itself (multipart file part) or the file as a base64 string; a data URL\nprefix such as \"data:image/png;base64,\" is allowed\n- accepted: JPEG, PNG or WebP, detected from the bytes, not from the file name (422 otherwise)\n- at most MEDIA_MAX_SIZE bytes after decoding, default 100 MiB (422 otherwise)\n- optional field \"kind\": profile (default here) or content; it decides the sizes the\nserver makes in the background (see GET /v1/media/{id}?size=)\n- optional field \"crop\": \"x,y,w,h\", the frame the user chose, in fractions (0-1) of the\nupright photo's width and height; without it the centre is used\n- the answer's id goes into users.photo_id (PATCH /v1/admin/users/{id} {\"photo_id\": id});\nurl is where clients load the image from: GET /v1/media/{id} on this API\n- 503 when S3 is not configured (S3_BUCKET empty)",
                 "consumes": [
                     "multipart/form-data",
                     "application/x-www-form-urlencoded"
@@ -5976,6 +6086,22 @@ const docTemplate = `{
                         "name": "file",
                         "in": "formData",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "profile",
+                            "content"
+                        ],
+                        "type": "string",
+                        "description": "profile (default) or content",
+                        "name": "kind",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "chosen frame x,y,w,h in fractions of the photo, e.g. 0,0.1,1,0.8",
+                        "name": "crop",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -6026,11 +6152,11 @@ const docTemplate = `{
         },
         "/v1/media/{id}": {
             "get": {
-                "description": "- redirects (302) to a short-lived signed link to the image in the private S3 bucket\n(valid MEDIA_LINK_TTL, default 1 hour); image widgets follow it on their own\n- needs no token, so \u003cimg\u003e and Image.network work; ids are random UUIDs\n- unknown id: 404; S3 not configured: 503",
+                "description": "- redirects (302) to a short-lived signed link to the image in the private S3 bucket\n(valid MEDIA_LINK_TTL, default 1 hour); image widgets follow it on their own\n- size: original (default), main, thumb or small. Content photos (activities, articles,\nvideo covers): main 1200x600, thumb 400x200, small 240x240 (centre square). Profile photos:\nmain 800x800, thumb 250x250 (small gives thumb). Sizes are made in the background a few\nseconds after the upload; until then, and for videos, the link opens the original\n- header X-Media-Variant says which one the redirect opens (the size, or \"original\")\n- needs no token, so \u003cimg\u003e and Image.network work; ids are random UUIDs\n- unknown id: 404; S3 not configured: 503",
                 "tags": [
                     "media"
                 ],
-                "summary": "opens an uploaded image",
+                "summary": "opens an uploaded image (or one of its sizes)",
                 "parameters": [
                     {
                         "type": "string",
@@ -6038,11 +6164,29 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "original",
+                            "main",
+                            "thumb",
+                            "small"
+                        ],
+                        "type": "string",
+                        "description": "original (default), main, thumb or small",
+                        "name": "size",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "302": {
                         "description": "Found"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/rest.BadRequestResponse"
+                        }
                     },
                     "404": {
                         "description": "Not Found",
@@ -6728,6 +6872,23 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "domain.MediaCrop": {
+            "type": "object",
+            "properties": {
+                "h": {
+                    "type": "number"
+                },
+                "w": {
+                    "type": "number"
+                },
+                "x": {
+                    "type": "number"
+                },
+                "y": {
+                    "type": "number"
+                }
+            }
+        },
         "domain.UserRole": {
             "type": "string",
             "enum": [
@@ -7478,6 +7639,24 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/rest.statusType"
+                }
+            }
+        },
+        "rest.RecropMediaRequest": {
+            "type": "object",
+            "properties": {
+                "crop": {
+                    "description": "Crop is the frame in fractions of the upright photo; null means the centre.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/domain.MediaCrop"
+                        }
+                    ]
+                },
+                "kind": {
+                    "description": "Kind is profile or content.",
+                    "type": "string",
+                    "example": "content"
                 }
             }
         },
@@ -8285,6 +8464,21 @@ const docTemplate = `{
                     "type": "string",
                     "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
+                "photo_main_url": {
+                    "description": "PhotoMainURL is the large size (content 1200x600, profile 800x800); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=main"
+                },
+                "photo_small_url": {
+                    "description": "PhotoSmallURL is the small square for list rows (content 240x240; a profile photo gives its\n250x250 thumb); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=small"
+                },
+                "photo_thumb_url": {
+                    "description": "PhotoThumbURL is the card size (content 400x200, profile 250x250); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=thumb"
+                },
                 "photo_url": {
                     "description": "PhotoURL is where to load the picture from (GET, no token); null without one.",
                     "type": "string",
@@ -8405,6 +8599,21 @@ const docTemplate = `{
                 "photo_id": {
                     "type": "string",
                     "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "photo_main_url": {
+                    "description": "PhotoMainURL is the large size (content 1200x600, profile 800x800); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=main"
+                },
+                "photo_small_url": {
+                    "description": "PhotoSmallURL is the small square for list rows (content 240x240; a profile photo gives its\n250x250 thumb); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=small"
+                },
+                "photo_thumb_url": {
+                    "description": "PhotoThumbURL is the card size (content 400x200, profile 250x250); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=thumb"
                 },
                 "photo_url": {
                     "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
@@ -8651,6 +8860,21 @@ const docTemplate = `{
                 "photo_id": {
                     "type": "string",
                     "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
+                },
+                "photo_main_url": {
+                    "description": "PhotoMainURL is the large size (content 1200x600, profile 800x800); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=main"
+                },
+                "photo_small_url": {
+                    "description": "PhotoSmallURL is the small square for list rows (content 240x240; a profile photo gives its\n250x250 thumb); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=small"
+                },
+                "photo_thumb_url": {
+                    "description": "PhotoThumbURL is the card size (content 400x200, profile 250x250); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=thumb"
                 },
                 "photo_url": {
                     "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
@@ -8944,6 +9168,11 @@ const docTemplate = `{
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
                 },
+                "kind": {
+                    "description": "Kind is profile or content (the variant sizes made); empty for a video.",
+                    "type": "string",
+                    "example": "content"
+                },
                 "size": {
                     "description": "bytes",
                     "type": "integer",
@@ -8952,6 +9181,11 @@ const docTemplate = `{
                 "url": {
                     "type": "string",
                     "example": "/v1/media/3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "variants_status": {
+                    "description": "VariantsStatus is pending right after an upload (sizes are being made), done, failed, or none (videos).",
+                    "type": "string",
+                    "example": "pending"
                 }
             }
         },
@@ -9378,6 +9612,21 @@ const docTemplate = `{
                     "type": "string",
                     "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
+                "photo_main_url": {
+                    "description": "PhotoMainURL is the large size (content 1200x600, profile 800x800); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=main"
+                },
+                "photo_small_url": {
+                    "description": "PhotoSmallURL is the small square for list rows (content 240x240; a profile photo gives its\n250x250 thumb); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=small"
+                },
+                "photo_thumb_url": {
+                    "description": "PhotoThumbURL is the card size (content 400x200, profile 250x250); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=thumb"
+                },
                 "photo_url": {
                     "description": "PhotoURL is where to load the cover from (GET, no token); null without one.",
                     "type": "string",
@@ -9532,6 +9781,21 @@ const docTemplate = `{
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "photo_main_url": {
+                    "description": "PhotoMainURL is the large size (content 1200x600, profile 800x800); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=main"
+                },
+                "photo_small_url": {
+                    "description": "PhotoSmallURL is the small square for list rows (content 240x240; a profile photo gives its\n250x250 thumb); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=small"
+                },
+                "photo_thumb_url": {
+                    "description": "PhotoThumbURL is the card size (content 400x200, profile 250x250); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=thumb"
                 },
                 "photo_url": {
                     "description": "PhotoURL is where clients load the photo from (GET, no token); null without a photo.",
@@ -9944,6 +10208,21 @@ const docTemplate = `{
                     "type": "string",
                     "example": "5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a"
                 },
+                "photo_main_url": {
+                    "description": "PhotoMainURL is the large size (content 1200x600, profile 800x800); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=main"
+                },
+                "photo_small_url": {
+                    "description": "PhotoSmallURL is the small square for list rows (content 240x240; a profile photo gives its\n250x250 thumb); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=small"
+                },
+                "photo_thumb_url": {
+                    "description": "PhotoThumbURL is the card size (content 400x200, profile 250x250); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=thumb"
+                },
                 "photo_url": {
                     "description": "PhotoURL is where the app loads the photo from (GET, no token); null without a photo.",
                     "type": "string",
@@ -10048,6 +10327,21 @@ const docTemplate = `{
                 "photo_id": {
                     "type": "string",
                     "example": "3f1d2c4b-8a9e-4b7c-9d2e-1a2b3c4d5e6f"
+                },
+                "photo_main_url": {
+                    "description": "PhotoMainURL is the large size (content 1200x600, profile 800x800); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=main"
+                },
+                "photo_small_url": {
+                    "description": "PhotoSmallURL is the small square for list rows (content 240x240; a profile photo gives its\n250x250 thumb); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=small"
+                },
+                "photo_thumb_url": {
+                    "description": "PhotoThumbURL is the card size (content 400x200, profile 250x250); null without a photo.",
+                    "type": "string",
+                    "example": "/v1/media/5d2f8a90-1c3b-4e6f-8a7d-9b0c1d2e3f4a?size=thumb"
                 },
                 "photo_url": {
                     "description": "PhotoURL is where clients load the photo from (GET, no token); null without a photo.",

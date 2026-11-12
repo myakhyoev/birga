@@ -224,9 +224,21 @@ table records what was uploaded. Created by `000003_create_media_table`.
 | `content_type` | `TEXT` | no | | `image/jpeg`, `image/png` or `image/webp`, or (admin uploads) `video/mp4` or `video/webm`, detected from the bytes |
 | `size_bytes` | `BIGINT` | no | | file size; `CHECK (size_bytes > 0)` |
 | `created_at` | `TIMESTAMPTZ` | no | `NOW()` | |
+| `kind` | `TEXT` | yes | | `profile` or `content` (`media_kind_check`): which [sizes](api.md#photo-sizes) are made; `NULL` for videos and for old images not used anywhere |
+| `crop_x`, `crop_y`, `crop_w`, `crop_h` | `DOUBLE PRECISION` | yes | | the frame chosen at upload, fractions (0-1) of the upright photo; all four or none (`media_crop_check`); none means the centre |
+| `variants` | `JSONB` | no | `'{}'` | size name to S3 key, e.g. `{"main": "media/<id>/main.jpg", "thumb": ..., "small": ...}` |
+| `variants_status` | `TEXT` | no | `'none'` | `none` (nothing to make), `pending` (queued), `done`, `failed` (`media_variants_status_check`) |
+| `variants_attempts` | `INT` | no | `0` | how often the worker took the row; it gives up after 5 |
+| `variants_error` | `TEXT` | yes | | the last failure |
+| `variants_claimed_at` | `TIMESTAMPTZ` | yes | | when a worker took the row; a claim older than 5 minutes is taken again |
 
-The table has no `updated_at` or `deleted_at`: a media row never changes, and a new photo
-is a new row. The public URL is not stored; it is built from `object_key` and
+Index `media_variants_pending_idx` on `created_at` where `variants_status = 'pending'` serves the
+worker. The `kind`, crop and `variants*` columns were added by `000029_media_variants`, which also
+queued every image already in use: photos of users and children became `profile`, pictures of
+activities, articles and video posts `content` (content wins if one photo is used both ways).
+
+Apart from the worker's `variants*` columns, a media row never changes, and a new photo
+is a new row (a new frame too: `POST /v1/admin/media/{id}/recrop` makes a new row). The public URL is not stored; it is built from `object_key` and
 `S3_PUBLIC_BASE_URL`, so the CDN or bucket address can change without a migration. The
 object is uploaded first and the row inserted after; if the insert fails the object is
 deleted again. Replaced photos are not cleaned up yet (no cleanup job).

@@ -46,11 +46,12 @@ testable with small fakes.
 | `internal/tokens/` | issues and parses the HS256 JWTs (`tokens.Issuer`): access and refresh tokens, `JWT_*` config |
 | `internal/redisstore/` | Redis state: one-time codes, the "phone verified" marks and the send-OTP rate limiter (`store.OTP()`) |
 | `internal/drivers/` | clients for external services, one package each (`playmobile`; `smslog` is the fake SMS sender; `s3storage` for files) |
-| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `child_updater`, `plan_getter`, `goal_creator`, `goal_getter`, `goal_lister`, `goal_updater`, `goal_deleter`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `user_login`, `user_logout`, `token_refresher`, `profile_updater`, `password_resetter`, `article_creator`, `article_getter`, `article_lister`, `article_updater`, `article_deleter`, `article_reader`, `daily_article`, `post_creator`, `post_getter`, `post_lister`, `post_updater`, `post_deleter`, `daily_post`, `topic_manager`, `tip_manager`, `daily_tip`, `pro_plan`, `today_list`, `milestone_manager`, `child_milestones`, `photo_seeder`. The newer packages group the admin actions of one entity (create, get, list, update, delete) as methods of one use case instead of one package per action |
+| `internal/usecases/` | `activity_creator`, `activity_getter`, `activity_lister`, `activity_updater`, `activity_deleter`, `completion_recorder`, `completion_lister`, `streak_getter`, `child_creator`, `child_getter`, `child_lister`, `child_updater`, `plan_getter`, `goal_creator`, `goal_getter`, `goal_lister`, `goal_updater`, `goal_deleter`, `token_checker`, `user_creator`, `user_getter`, `user_lister`, `user_updater`, `user_deleter`, `otp_sender`, `otp_verifier`, `media_uploader`, `user_signup`, `user_login`, `user_logout`, `token_refresher`, `profile_updater`, `password_resetter`, `article_creator`, `article_getter`, `article_lister`, `article_updater`, `article_deleter`, `article_reader`, `daily_article`, `post_creator`, `post_getter`, `post_lister`, `post_updater`, `post_deleter`, `daily_post`, `topic_manager`, `tip_manager`, `daily_tip`, `pro_plan`, `today_list`, `milestone_manager`, `child_milestones`, `photo_seeder`, `media_variants` (the photo size worker). The newer packages group the admin actions of one entity (create, get, list, update, delete) as methods of one use case instead of one package per action |
 | `internal/gateways/rest/` | gin server, middleware, routes, handlers with swagger comments, response envelope |
 | `pkg/logger/` | zap wrapper carrying request-scoped fields through `context.Context`; `ginlog` (request id, access log, recovery), `httplog` (outgoing call logging) |
 | `pkg/metrics/` | Prometheus collectors for HTTP server, HTTP client, pgx queries and pool; `/metrics` server |
 | `pkg/remote/` | JSON-over-HTTP client used by drivers; non-2xx responses become `*remote.StatusError` |
+| `pkg/imagevariant/` | photo resizing: decodes JPEG/PNG/WebP (turns phone JPEGs upright from their EXIF orientation), cuts a frame, scales with Catmull-Rom (`golang.org/x/image/draw`), encodes JPEG q85 |
 | `api/docs/` | generated swagger (`make swag-init`); never edit by hand |
 | `migrations/` | golang-migrate SQL files ([data-model.md](data-model.md)) |
 | `seeds/` | optional starter data, loaded by hand (`make seed`), never by migrations |
@@ -73,8 +74,9 @@ resource that needs closing:
 5. Use cases, with `tokens.Issuer`; startup fails if `JWT_SECRET` is shorter than 32 bytes.
 6. REST server.
 
-`App.Run` starts the metrics server on `METRICS_PORT` and the API on `HTTP_PORT`, then waits
-for a signal or a server error. Teardown runs in reverse order: the HTTP server gets 10 seconds
+`App.Run` starts the metrics server on `METRICS_PORT`, the background jobs (the
+[photo variant worker](#photo-variants), when S3 is configured) and the API on `HTTP_PORT`, then waits
+for a signal or a server error. The background jobs are stopped and awaited first. Teardown runs in reverse order: the HTTP server gets 10 seconds
 to finish in-flight requests, then the Redis client and the DB pool close, then the logger
 flushes. `/health` pings both PostgreSQL and Redis (`bootstrap.healthCheck`).
 
@@ -241,7 +243,34 @@ message id (a fresh UUID per send).
   With `S3_BUCKET` empty, bootstrap builds no S3 client and no `media_uploader`, and the REST
   server answers `POST /v1/media` and `GET /v1/media/{id}` with 503. The bucket is private:
   `media_uploader.Link` looks up the media row and presigns its key, and `GET /v1/media/{id}`
-  redirects to that link. User and child views carry `photo_url` = `/v1/media/{photo_id}`.
+  redirects to that link (`?size=` picks a variant key instead, see below). Views with a photo carry
+  `photo_url` = `/v1/media/{photo_id}` and `photo_main_url`/`photo_thumb_url`/`photo_small_url`.
+
+### Photo variants
+
+Uploads keep the original and the sizes (variants) are made in the background, inside the API
+process, so no AWS Lambda or extra server is needed:
+
+1. `media_uploader.Execute` stores the original under `media/<id>.<ext>` and inserts the media row
+   with its `kind` (`profile` or `content`) and optional crop; an image with a kind gets
+   `variants_status = 'pending'`. It then calls `OnUpload`, which wakes the worker.
+2. `media_variants.Run` (started by `App.Run`) loops: it claims the oldest pending row
+   (`mediaRepo.ClaimPending`: `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)`, counting
+   the attempt and stamping `variants_claimed_at`, so two API instances never take the same row),
+   downloads the original (`s3storage.Get`), and with `pkg/imagevariant` cuts the kind's frame (the
+   chosen crop, or the centre) and renders every size of the kind (`domain.MediaVariantSpecs`:
+   profile 800x800 + 250x250; content 1200x600 + 400x200 + a 240x240 centre square of the frame).
+   Each is written as `media/<id>/<size>.jpg` and the keys are saved in `media.variants` with status
+   `done`. When the queue is empty it sleeps until the next upload or `MEDIA_VARIANTS_INTERVAL`
+   (default 1 minute).
+3. Failures: an image that cannot be decoded (or over 50 megapixels) is `failed` at once; a storage
+   error leaves the row pending, and it is taken again once the claim is 5 minutes old, up to 5
+   attempts. Clients never wait: `GET /v1/media/{id}?size=` serves the original until the size exists.
+4. `POST /v1/admin/media/{id}/recrop` downloads the original and runs it through `Execute` again with
+   the new kind and frame, giving a new media id; ids never change their picture, so phones can
+   keep photos by id.
+
+The worker also handles the backfill: migration `000029_media_variants` queued every image already in use.
 
 Request and response bodies of outgoing calls are not logged (`httplog` without
 `WithBodies`), so OTP codes never reach the logs when Play Mobile is used.

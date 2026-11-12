@@ -62,3 +62,11 @@ else
 	PHOTO="'n/a'"
 fi
 psql "$POSTGRES_URL" -tA -F ' | ' -c "SELECT id, title_uz, $PHOTO FROM activities WHERE deleted_at IS NULL ORDER BY id" 2>&1 | mask
+
+echo "== photo sizes (kind | variants_status | count), and the last failures"
+if psql "$POSTGRES_URL" -tAc "SELECT 1 FROM information_schema.columns WHERE table_name='media' AND column_name='variants_status'" | grep -q 1; then
+	psql "$POSTGRES_URL" -tA -F ' | ' -c "SELECT COALESCE(kind, '-'), variants_status, count(*) FROM media GROUP BY 1, 2 ORDER BY 1, 2" 2>&1 | mask
+	psql "$POSTGRES_URL" -tA -F ' | ' -c "SELECT id, variants_status, variants_attempts, left(variants_error, 200) FROM media WHERE variants_error IS NOT NULL ORDER BY created_at DESC LIMIT 10" 2>&1 | mask
+else
+	echo "n/a (migration 000029 not applied)"
+fi
